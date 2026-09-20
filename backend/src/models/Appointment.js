@@ -19,6 +19,13 @@ const appointmentSchema = new mongoose.Schema(
       ref: "Service",
       required: true,
     },
+ 
+paymentStatus: {
+  type: String,
+  enum: ["unpaid", "deposit_paid", "paid", "refunded"],
+  default: "unpaid",
+  index: true,
+},
 
     date: {
       type: Date,

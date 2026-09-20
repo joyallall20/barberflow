@@ -5,6 +5,9 @@ import { z } from "zod";
 import Appointment from "../models/Appointment.js";
 import Customer from "../models/Customer.js";
 import BookingLock from "../models/BookingLock.js";
+import Payment from "../models/Payment.js";
+import Refund from "../models/Refund.js";
+
 import {
   TIME_REGEX,
   addDaysUTC,
@@ -31,11 +34,18 @@ const APPOINTMENT_STATUSES = [
   "cancelled",
   "no_show",
 ];
+
+// Payment statuses mirrored from the Appointment schema.
+const PAYMENT_STATUSES = ["unpaid", "deposit_paid", "paid", "refunded"];
+
 const POPULATE_PATHS = [
   { path: "customer", select: "name email phone" },
   { path: "barber", select: "name photo" },
   { path: "service", select: "name price duration" },
 ];
+
+// Statuses from which payment is required before completion.
+const PAYABLE_PAYMENT_STATUSES = ["paid", "deposit_paid"];
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -63,6 +73,24 @@ const loadAppointment = async (id) => {
   return appointment;
 };
 
+/**
+ * Attach the latest "live" payment to an appointment response.
+ * Used to give the frontend the appointment + its payment in one call.
+ */
+const attachPayment = async (appointment) => {
+  const payment = await Payment.findOne({
+    appointment: appointment._id,
+    status: {
+      $in: ["authorized", "completed", "partially_refunded", "refunded"],
+    },
+  }).sort("-createdAt");
+
+  return {
+    ...appointment.toObject(),
+    payment: payment || null,
+  };
+};
+
 /* ------------------------------------------------------------------ */
 /* Zod schemas                                                         */
 /* ------------------------------------------------------------------ */
@@ -82,17 +110,17 @@ const listQuerySchema = z.object({
   barber: z.string().regex(OBJECT_ID_REGEX).optional(),
   customer: z.string().regex(OBJECT_ID_REGEX).optional(),
   status: z.enum(APPOINTMENT_STATUSES).optional(),
+  paymentStatus: z.enum(PAYMENT_STATUSES).optional(), // <— NEW
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
-// Generic update is intentionally narrow.
-// Status transitions live on their dedicated endpoints:
-//   /confirm, /complete, /no-show, /cancel, /reschedule
-// Internal flags (reminderSent, reviewRequestSent, rebookingReminderSent)
-// are not writable from the API at all.
+// paymentStatus is intentionally NOT writable here — only the Payment /
+// Refund controllers and the PayPal webhook may mutate it, preserving
+// a clean audit trail. Internal flags (reminderSent, reviewRequestSent,
+// rebookingReminderSent) remain non-writable.
 const updateAppointmentSchema = z
   .object({
     notes: z.string().trim().max(2000).optional(),
@@ -102,6 +130,8 @@ const updateAppointmentSchema = z
 
 const cancelSchema = z.object({
   cancellationReason: z.string().trim().max(500).optional().default(""),
+  // Who is initiating the cancellation — determines refund policy.
+  cancelledBy: z.enum(["customer", "barber", "admin"]).optional().default("admin"),
 });
 
 const rescheduleSchema = z.object({
@@ -116,11 +146,6 @@ const rescheduleSchema = z.object({
 export const createAppointment = asyncHandler(async (req, res) => {
   const payload = parseOrThrow(createAppointmentSchema, req.body);
 
-  /*
-   * Cheap pre-flight check BEFORE touching the DB for the customer.
-   * If the barber is inactive, the service is inactive, or the date
-   * is in the past, we fail fast without creating a customer.
-   */
   const bookingPreview = await validateBookingSlot({
     barberId: payload.barber,
     serviceId: payload.service,
@@ -128,11 +153,6 @@ export const createAppointment = asyncHandler(async (req, res) => {
     startTime: payload.startTime,
   });
 
-  /*
-   * Resolve/create the customer before the transaction.
-   * findOrCreateCustomer handles the identity-race case by matching
-   * on normalized email/phone.
-   */
   const customer = await findOrCreateCustomer({
     name: payload.name,
     email: payload.email,
@@ -142,17 +162,6 @@ export const createAppointment = asyncHandler(async (req, res) => {
     notes: payload.notes,
   });
 
-  /*
-   * Serialize bookings for the same barber/date.
-   *
-   * Both requests attempt to write the SAME BookingLock document
-   * (_id = "<barberId>_<YYYY-MM-DD>"). MongoDB allows only one
-   * uncommitted writer per document; the other transaction gets
-   * a WriteConflict, which withTransaction retries automatically.
-   *
-   * On the retry, the availability re-check sees the first
-   * transaction's committed appointment and throws 409.
-   */
   const session = await mongoose.startSession();
 
   try {
@@ -177,12 +186,6 @@ export const createAppointment = asyncHandler(async (req, res) => {
         }
       );
 
-      /*
-       * IMPORTANT: re-check availability AFTER acquiring the lock.
-       * The pre-flight check at the top of this function is racy by
-       * design (it runs outside the transaction); this re-check is
-       * the one that matters.
-       */
       const booking = await validateBookingSlot({
         barberId: payload.barber,
         serviceId: payload.service,
@@ -199,8 +202,9 @@ export const createAppointment = asyncHandler(async (req, res) => {
             date: booking.date,
             startTime: booking.startTime,
             endTime: booking.endTime,
-            price: booking.price, // price snapshot at booking time
+            price: booking.price,
             status: "confirmed",
+            paymentStatus: "unpaid", // <— explicit; schema default covers it too
             notes: payload.notes || "",
           },
         ],
@@ -223,15 +227,14 @@ export const createAppointment = asyncHandler(async (req, res) => {
 });
 
 export const getAppointments = asyncHandler(async (req, res) => {
-  const { barber, customer, status, from, to, page, limit } = parseOrThrow(
-    listQuerySchema,
-    req.query
-  );
+  const { barber, customer, status, paymentStatus, from, to, page, limit } =
+    parseOrThrow(listQuerySchema, req.query);
 
   const filter = {};
   if (barber) filter.barber = barber;
   if (customer) filter.customer = customer;
   if (status) filter.status = status;
+  if (paymentStatus) filter.paymentStatus = paymentStatus; // <— NEW
 
   if (from || to) {
     filter.date = {};
@@ -264,7 +267,10 @@ export const getAppointmentById = asyncHandler(async (req, res) => {
   const appointment = await Appointment.findById(id).populate(POPULATE_PATHS);
   if (!appointment) throw new ApiError(404, "Appointment not found");
 
-  return sendSuccess(res, appointment, "Appointment retrieved successfully");
+  // NEW: attach the latest live payment for convenience
+  const withPayment = await attachPayment(appointment);
+
+  return sendSuccess(res, withPayment, "Appointment retrieved successfully");
 });
 
 export const updateAppointment = asyncHandler(async (req, res) => {
@@ -279,19 +285,96 @@ export const updateAppointment = asyncHandler(async (req, res) => {
   return sendSuccess(res, appointment, "Appointment updated successfully");
 });
 
+/**
+ * Admin / barber cancellation — auto-refunds when the caller is
+ * admin or barber. Customer self-cancellations go through
+ * `cancelMyCustomerAppointment` and follow a "no auto-refund" policy.
+ */
 export const cancelAppointment = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { cancellationReason } = parseOrThrow(cancelSchema, req.body || {});
+  const { cancellationReason, cancelledBy } = parseOrThrow(
+    cancelSchema,
+    req.body || {}
+  );
 
   const appointment = await loadAppointment(id);
   ensureStatus(appointment, ["pending", "confirmed"], "cancel");
 
-  appointment.status = "cancelled";
-  if (cancellationReason) appointment.cancellationReason = cancellationReason;
-  await appointment.save();
-  await appointment.populate(POPULATE_PATHS);
+  const session = await mongoose.startSession();
+  let refundTriggered = false;
 
-  return sendSuccess(res, appointment, "Appointment cancelled successfully");
+  try {
+    await session.withTransaction(async () => {
+      appointment.status = "cancelled";
+      if (cancellationReason) appointment.cancellationReason = cancellationReason;
+
+      // Auto-refund policy:
+      //   customer → no auto-refund (admin can issue manually)
+      //   barber   → full refund
+      //   admin    → full refund
+      const shouldRefund = cancelledBy === "barber" || cancelledBy === "admin";
+
+      if (shouldRefund) {
+        const paid = await Payment.findOne({
+          appointment: appointment._id,
+          status: { $in: ["authorized", "completed", "partially_refunded"] },
+        }).session(session);
+
+        if (paid) {
+          const remaining = paid.amount - (paid.refundedAmount || 0);
+
+          if (remaining > 0) {
+            const refundReason =
+              cancelledBy === "barber"
+                ? "barber_cancellation"
+                : "admin_refund";
+
+            await Refund.create(
+              [
+                {
+                  payment: paid._id,
+                  appointment: appointment._id,
+                  provider: paid.provider,
+                  amount: remaining,
+                  currency: paid.currency,
+                  reason: refundReason,
+                  status: "pending",
+                  initiatedBy: req.user?.mongoId || req.user?._id || null,
+                  note: `Auto-generated refund on appointment cancellation (${cancelledBy})`,
+                },
+              ],
+              { session }
+            );
+
+            paid.refundedAmount = (paid.refundedAmount || 0) + remaining;
+            paid.status =
+              paid.refundedAmount >= paid.amount
+                ? "refunded"
+                : "partially_refunded";
+            await paid.save({ session });
+
+            if (paid.status === "refunded") {
+              appointment.paymentStatus = "refunded";
+            }
+
+            refundTriggered = true;
+          }
+        }
+      }
+
+      await appointment.save({ session });
+    });
+
+    await appointment.populate(POPULATE_PATHS);
+
+    return sendSuccess(
+      res,
+      { appointment, refundTriggered },
+      "Appointment cancelled successfully"
+    );
+  } finally {
+    await session.endSession();
+  }
 });
 
 export const confirmAppointment = asyncHandler(async (req, res) => {
@@ -307,11 +390,30 @@ export const confirmAppointment = asyncHandler(async (req, res) => {
   return sendSuccess(res, appointment, "Appointment confirmed successfully");
 });
 
+/**
+ * Completion requires payment. An appointment with paymentStatus
+ * "unpaid" cannot be marked completed — this prevents unpaid work
+ * from being marked done and skewing stats.
+ */
 export const completeAppointment = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const appointment = await loadAppointment(id);
 
   ensureStatus(appointment, ["pending", "confirmed"], "complete");
+
+  if (appointment.paymentStatus === "unpaid") {
+    throw new ApiError(
+      409,
+      "Cannot complete an appointment that has not been paid"
+    );
+  }
+
+  if (appointment.paymentStatus === "refunded") {
+    throw new ApiError(
+      409,
+      "Cannot complete an appointment that has been refunded"
+    );
+  }
 
   appointment.status = "completed";
   await appointment.save();
@@ -326,6 +428,11 @@ export const markNoShow = asyncHandler(async (req, res) => {
 
   ensureStatus(appointment, ["pending", "confirmed"], "mark as no-show");
 
+  // Business rule: a no-show on an unpaid appointment is a no-op
+  // (nothing to charge, nothing to refund). A no-show on a paid
+  // appointment typically keeps the deposit — that's a policy call,
+  // so we don't touch paymentStatus here. Admins can refund manually
+  // via the /refunds endpoint if needed.
   appointment.status = "no_show";
   await appointment.save();
   await appointment.populate(POPULATE_PATHS);
@@ -351,13 +458,6 @@ export const rescheduleAppointment = asyncHandler(async (req, res) => {
     let updatedAppointment;
 
     await session.withTransaction(async () => {
-      /*
-       * Lock the TARGET barber/date.
-       *
-       * The lock id uses the raw "YYYY-MM-DD" string — exactly the
-       * same format createAppointment uses, so both flows serialize
-       * against the same BookingLock document.
-       */
       const lockId = `${String(appointment.barber)}_${date}`;
 
       await BookingLock.findOneAndUpdate(
@@ -376,11 +476,6 @@ export const rescheduleAppointment = asyncHandler(async (req, res) => {
         }
       );
 
-      /*
-       * Re-check availability AFTER acquiring the lock.
-       * The current appointment is excluded so rescheduling to its
-       * existing slot doesn't conflict with itself.
-       */
       const booking = await validateBookingSlot({
         barberId: appointment.barber,
         serviceId: appointment.service,
@@ -411,11 +506,28 @@ export const rescheduleAppointment = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Deletion is blocked once any payment or refund exists — financial
+ * history must not be silently dropped. Use status "cancelled"
+ * instead of delete if you need to "remove" a paid appointment.
+ */
 export const deleteAppointment = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const appointment = await loadAppointment(id);
   const appointmentId = appointment._id;
+
+  const [paymentExists, refundExists] = await Promise.all([
+    Payment.exists({ appointment: appointmentId }),
+    Refund.exists({ appointment: appointmentId }),
+  ]);
+
+  if (paymentExists || refundExists) {
+    throw new ApiError(
+      409,
+      "Cannot delete an appointment with associated payments or refunds"
+    );
+  }
 
   await appointment.deleteOne();
 
@@ -450,6 +562,13 @@ export const getMyCustomerAppointments = asyncHandler(async (req, res) => {
   );
 });
 
+/**
+ * Customer self-cancellation.
+ *
+ * Policy: customer cancellations do NOT auto-refund — a deposit is
+ * typically retained. Admins can issue refunds manually via
+ * POST /api/refunds when warranted (e.g. the barber is at fault).
+ */
 export const cancelMyCustomerAppointment = asyncHandler(async (req, res) => {
   const { id } = req.params;
   ensureObjectId(id, "appointment ID");
@@ -460,12 +579,14 @@ export const cancelMyCustomerAppointment = asyncHandler(async (req, res) => {
 
   const appointment = await loadAppointment(id);
 
-  // IDOR Protection: Verify caller owns this appointment via customer profile
   const customer = await Customer.findOne({
     $or: [{ userId: req.user.mongoId }, { email: req.user.email }],
   }).select("_id");
 
-  if (!customer || String(appointment.customer._id || appointment.customer) !== String(customer._id)) {
+  if (
+    !customer ||
+    String(appointment.customer._id || appointment.customer) !== String(customer._id)
+  ) {
     throw new ApiError(403, "You are not authorized to cancel this appointment");
   }
 
@@ -478,6 +599,7 @@ export const cancelMyCustomerAppointment = asyncHandler(async (req, res) => {
 
   appointment.status = "cancelled";
   appointment.cancellationReason = cancellationReason;
+  // paymentStatus intentionally left as-is — admin handles refunds.
   await appointment.save();
   await appointment.populate(POPULATE_PATHS);
 

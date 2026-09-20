@@ -9,6 +9,7 @@ import helmet from "helmet";
 import apiRouter from "./src/routes/index.js";
 import { notFoundHandler, errorHandler } from "./src/middleware/error.js";
 import { apiLimiter } from "./src/middleware/rateLimiter.js";
+import { handlePaypalWebhook } from "./src/controllers/webhook.controller.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,11 +45,28 @@ app.use(
   })
 );
 
+// --------------------------------------------------
+// PayPal Webhook (MUST be before express.json())
+// --------------------------------------------------
+// PayPal webhooks require the *raw* request body to verify
+// the transmission signature. `express.raw` captures the body
+// as a Buffer without parsing it — that buffer is then used
+// against the PayPal-Verification header set.
+app.post(
+  "/api/webhooks/paypal",
+  express.raw({ type: "application/json", limit: "1mb" }),
+  handlePaypalWebhook
+);
+
+// --------------------------------------------------
+// Body Parsing (after webhook routes)
+// --------------------------------------------------
 // Body parsing limits (prevent payload memory exhaustion attacks)
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
 // General Rate Limiting for API routes
+// (note: webhooks bypass this since they're registered earlier)
 app.use("/api", apiLimiter);
 
 // --------------------------------------------------

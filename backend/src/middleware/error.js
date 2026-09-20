@@ -22,7 +22,9 @@ export const errorHandler = (err, req, res, next) => {
   } else if (err instanceof ZodError) {
     statusCode = 400;
     const first = err.issues[0];
-    message = first ? `${first.path.join(".") || "body"}: ${first.message}` : "Validation failed";
+    message = first
+      ? `${first.path.join(".") || "body"}: ${first.message}`
+      : "Validation failed";
     errors = err.flatten();
   } else if (err.name === "ValidationError") {
     statusCode = 400;
