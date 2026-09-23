@@ -105,7 +105,10 @@ const Login = () => {
 
   // Already signed in → role-based redirect (respects deep-link target).
   if (!loading && !bootstrapping && user && role) {
-    const from = location.state?.from?.pathname;
+    const from = location.state?.returnToBooking 
+      ? (location.state?.from || "/book") 
+      : location.state?.from?.pathname;
+      
     return <Navigate to={resolvePostLoginPath(from, role)} replace />;
   }
 
@@ -121,7 +124,9 @@ const Login = () => {
 
       // login() hydrates mongoUser; read fresh role from the store.
       const nextRole = useAuthStore.getState().role;
-      const from = location.state?.from?.pathname;
+      const from = location.state?.returnToBooking 
+        ? (location.state?.from || "/book") 
+        : location.state?.from?.pathname;
 
       navigate(resolvePostLoginPath(from, nextRole), { replace: true });
     } catch (err) {
@@ -141,7 +146,9 @@ const Login = () => {
       await loginWithGoogle();
 
       const nextRole = useAuthStore.getState().role;
-      const from = location.state?.from?.pathname;
+      const from = location.state?.returnToBooking 
+        ? (location.state?.from || "/book") 
+        : location.state?.from?.pathname;
 
       navigate(resolvePostLoginPath(from, nextRole), { replace: true });
     } catch (err) {
@@ -229,7 +236,9 @@ const Login = () => {
               </h1>
 
               <p className="mt-3 text-sm leading-relaxed text-[#8f897e]">
-                Access your appointments and account.
+                {location.state?.returnToBooking 
+                  ? "Please log in to continue with your booking." 
+                  : "Access your appointments and account."}
               </p>
 
               {/* Google */}

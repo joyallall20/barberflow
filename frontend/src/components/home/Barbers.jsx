@@ -84,7 +84,7 @@ const Barbers = () => {
     <section
       id="barbers"
       ref={sectionRef}
-      className="relative h-[calc(100vh-80px)] overflow-hidden bg-[#141311] text-[#e8e2d6]"
+      className="relative overflow-hidden bg-[#141311] text-[#e8e2d6] md:h-[calc(100vh-80px)]"
     >
       {/* Subtle background wordmark */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
@@ -93,7 +93,7 @@ const Barbers = () => {
         </span>
       </div>
 
-      <div className="relative z-10 mx-auto flex h-full max-w-7xl flex-col px-6 py-6 md:px-12 md:py-7 lg:px-16">
+      <div className="relative z-10 mx-auto flex max-w-7xl flex-col px-6 py-10 md:h-full md:px-12 md:py-7 lg:px-16">
         {/* Heading */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
@@ -114,9 +114,9 @@ const Barbers = () => {
         </motion.div>
 
         {/* Main barber feature */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-6 md:grid-cols-12 md:gap-8">
+        <div className="grid grid-cols-1 items-stretch gap-6 md:min-h-0 md:flex-1 md:grid-cols-12 md:gap-8">
           {/* Large image — portrait ratio, height-capped so it fits the viewport */}
-          <div className="relative mx-auto h-[340px] w-full max-w-[280px] overflow-hidden border border-white/10 sm:h-[400px] md:col-span-5 md:h-full md:max-h-full md:max-w-none">
+          <div className="relative mx-auto h-[300px] w-full max-w-[240px] overflow-hidden border border-white/10 sm:h-[400px] sm:max-w-[280px] md:col-span-5 md:h-full md:max-h-full md:max-w-none">
             <AnimatePresence mode="wait">
               <motion.img
                 key={current.id}
@@ -140,7 +140,7 @@ const Barbers = () => {
           </div>
 
           {/* Barber information */}
-          <div className="flex min-h-0 flex-col justify-between md:col-span-7">
+          <div className="flex flex-col justify-between md:col-span-7 md:min-h-0">
             <AnimatePresence mode="wait">
               <motion.div
                 key={current.id}
@@ -184,7 +184,7 @@ const Barbers = () => {
 
                 <a
                   href="/book"
-                  className="mt-4 inline-flex w-fit items-center gap-3 bg-amber-500 px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-amber-400"
+                  className="mt-4 inline-flex w-full items-center justify-center gap-3 bg-amber-500 px-5 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141311] sm:w-fit sm:justify-start sm:py-2.5"
                 >
                   Book {current.firstName}
                   <span>→</span>
@@ -193,15 +193,15 @@ const Barbers = () => {
             </AnimatePresence>
 
             {/* ---- Barber selector ---- */}
-            <div className="mt-4 flex items-center border-t border-white/10 pt-3.5">
-              <div className="flex gap-2">
+            <div className="mt-4 flex items-center gap-2 border-t border-white/10 pt-3.5">
+              <div className="flex gap-1.5 sm:gap-2">
                 {barbers.map((barber, index) => (
                   <button
                     key={barber.id}
                     type="button"
                     onClick={() => setActive(index)}
                     aria-label={`View ${barber.name}`}
-                    className={`relative h-12 w-12 overflow-hidden border transition-all duration-300 md:h-14 md:w-14 ${
+                    className={`relative h-10 w-10 shrink-0 overflow-hidden border transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141311] sm:h-12 sm:w-12 md:h-14 md:w-14 ${
                       index === active
                         ? "border-amber-500 opacity-100"
                         : "border-white/15 opacity-45 hover:opacity-80"
@@ -220,12 +220,12 @@ const Barbers = () => {
                 ))}
               </div>
 
-              <div className="ml-auto flex gap-2">
+              <div className="ml-auto flex shrink-0 gap-1.5 sm:gap-2">
                 <button
                   type="button"
                   onClick={previous}
                   aria-label="Previous barber"
-                  className="flex h-10 w-10 items-center justify-center border border-white/15 text-base transition hover:border-amber-500 hover:text-amber-500"
+                  className="flex h-9 w-9 items-center justify-center border border-white/15 text-base transition hover:border-amber-500 hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141311] sm:h-10 sm:w-10"
                 >
                   ←
                 </button>
@@ -234,7 +234,7 @@ const Barbers = () => {
                   type="button"
                   onClick={next}
                   aria-label="Next barber"
-                  className="flex h-10 w-10 items-center justify-center border border-white/15 text-base transition hover:border-amber-500 hover:text-amber-500"
+                  className="flex h-9 w-9 items-center justify-center border border-white/15 text-base transition hover:border-amber-500 hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141311] sm:h-10 sm:w-10"
                 >
                   →
                 </button>

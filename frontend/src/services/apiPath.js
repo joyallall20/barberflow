@@ -9,6 +9,12 @@ const API_PATH = {
   AVAILABILITY: "/availability",
   APPOINTMENTS: "/appointments",
 
+  // Payments
+  PAYMENTS: {
+    CREATE: "/payments",
+    CAPTURE: (id) => `/payments/${id}/capture`,
+  },
+
   // Admin
   ADMIN: {
     SERVICES: "/admin/services",

@@ -119,7 +119,7 @@ const Trust = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.3 }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="group relative overflow-hidden border-b border-r border-white/10 p-6 md:p-8 lg:p-10"
+              className="group relative overflow-hidden border-b border-r border-white/10 p-5 sm:p-6 md:p-8 lg:p-10"
             >
               {/* Hover sweep line */}
               <span className="pointer-events-none absolute inset-x-0 top-0 h-px -translate-x-full bg-gradient-to-r from-transparent via-amber-500 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
@@ -128,9 +128,9 @@ const Trust = () => {
               <span className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-500/0 via-amber-500/0 to-amber-500/[0.06] opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
 
               <Icon
-                size={20}
+                size={18}
                 strokeWidth={1.5}
-                className="relative mb-10 text-amber-500 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6"
+                className="relative mb-6 text-amber-500 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6 sm:mb-8 sm:size-5 md:mb-10"
               />
 
               <motion.div
@@ -142,7 +142,7 @@ const Trust = () => {
                   delay: index * 0.1 + 0.15,
                   ease: [0.22, 1, 0.36, 1],
                 }}
-                className="relative text-4xl font-extrabold tracking-tight text-[#e8e2d6] transition-colors duration-300 group-hover:text-amber-500 md:text-5xl"
+                className="relative text-3xl font-extrabold tracking-tight text-[#e8e2d6] transition-colors duration-300 group-hover:text-amber-500 sm:text-4xl md:text-5xl"
               >
                 <CountUp to={to} suffix={suffix} decimals={decimals} />
               </motion.div>

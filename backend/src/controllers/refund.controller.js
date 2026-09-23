@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Refund from "../models/Refund.js";
 import Payment from "../models/Payment.js";
 import Appointment from "../models/Appointment.js";
+import { refundPaypalCapture } from "../services/paypal.service.js";
 
 /**
  * Helper: standard API response
@@ -45,153 +46,303 @@ const VALID_REASONS = [
  * @route   POST /api/refunds
  * @access  Private/Admin
  */
+/**
+ * @desc    Create and process a refund
+ * @route   POST /api/refunds
+ * @access  Private/Admin
+ *
+ * P0.6:
+ * - Create refund as pending.
+ * - Never update Payment before PayPal confirms the refund.
+ * - Never call PayPal inside a MongoDB transaction.
+ * - Payment financial totals are updated only after provider success.
+ */
 export const createRefund = async (req, res) => {
-  const session = await mongoose.startSession();
+
+  if (!isAdminOrOwner(req)) {
+  return respond(
+    res,
+    403,
+    false,
+    "Only an admin or owner can initiate a refund"
+  );
+}
+
+  let refundId;
+
   try {
     const {
       payment: paymentId,
       amount,
       reason = "other",
       note,
-      providerRefundId,
-      providerResponse,
-      initiatedBy,
     } = req.body;
 
     if (!paymentId || !mongoose.Types.ObjectId.isValid(paymentId)) {
       return respond(res, 400, false, "Valid payment id is required");
     }
-    if (amount === undefined || amount === null || Number(amount) <= 0) {
+
+    if (amount === undefined || amount === null) {
       return respond(res, 400, false, "A valid refund amount is required");
     }
+
+    const refundAmount = Number(amount);
+
+    if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+      return respond(res, 400, false, "A valid refund amount is required");
+    }
+
     if (!VALID_REASONS.includes(reason)) {
       return respond(res, 400, false, "Invalid refund reason");
     }
 
-    let refund;
+    // ------------------------------------------------------------
+    // STEP 1 — Read payment and validate refund eligibility.
+    // ------------------------------------------------------------
+    const payment = await Payment.findById(paymentId);
 
-    await session.withTransaction(async () => {
-      const payment = await Payment.findById(paymentId).session(session);
-      if (!payment) {
-        throw Object.assign(new Error("Payment not found"), { status: 404 });
-      }
+    if (!payment) {
+      return respond(res, 404, false, "Payment not found");
+    }
 
-      // Only completed / partially_refunded payments can be refunded
-      if (!["completed", "partially_refunded"].includes(payment.status)) {
-        throw Object.assign(
-          new Error(`Cannot refund a payment with status "${payment.status}"`),
-          { status: 400 }
-        );
-      }
+    if (!["completed", "partially_refunded"].includes(payment.status)) {
+      return respond(
+        res,
+        400,
+        false,
+        `Cannot refund a payment with status "${payment.status}"`
+      );
+    }
 
-      const remaining = payment.amount - (payment.refundedAmount || 0);
-      const refundAmount = Number(amount);
+    if (!payment.providerCaptureId) {
+      return respond(
+        res,
+        409,
+        false,
+        "Payment does not have a verified PayPal capture"
+      );
+    }
 
-      if (refundAmount > remaining) {
-        throw Object.assign(
-          new Error(`Refund amount exceeds remaining refundable balance (${remaining})`),
-          { status: 400 }
-        );
-      }
+    const remaining =
+      Number(payment.amount) - Number(payment.refundedAmount || 0);
 
-      // Duplicate providerRefundId check (idempotency)
-      if (providerRefundId) {
-        const existing = await Refund.findOne({ providerRefundId }).session(session);
-        if (existing) {
+    if (refundAmount > remaining) {
+      return respond(
+        res,
+        400,
+        false,
+        `Refund amount exceeds remaining refundable balance (${remaining})`
+      );
+    }
+
+    // ------------------------------------------------------------
+    // STEP 2 — Create ONLY a pending financial record.
+    //
+    // IMPORTANT:
+    // Do NOT update Payment here.
+    // The refund has not happened at PayPal yet.
+    // ------------------------------------------------------------
+    const refund = await Refund.create({
+      payment: payment._id,
+      appointment: payment.appointment,
+      provider: payment.provider,
+      amount: refundAmount,
+      currency: payment.currency,
+      reason,
+      status: "pending",
+      initiatedBy: req.user?.mongoId || null,
+      note,
+    });
+
+    refundId = refund._id;
+
+    // ------------------------------------------------------------
+    // STEP 3 — Call PayPal OUTSIDE a MongoDB transaction.
+    // ------------------------------------------------------------
+    let providerResult;
+
+    try {
+      providerResult = await refundPaypalCapture(
+        payment.providerCaptureId,
+        refundAmount,
+        payment.currency
+      );
+    } catch (providerError) {
+      console.error("PayPal refund failed:", providerError);
+
+      refund.status = "failed";
+      refund.providerResponse = {
+        error: providerError.message,
+      };
+
+      await refund.save();
+
+      return respond(
+        res,
+        502,
+        false,
+        "PayPal refund failed. No payment balance was changed."
+      );
+    }
+
+    // ------------------------------------------------------------
+    // STEP 4 — Provider must explicitly confirm completion.
+    // ------------------------------------------------------------
+    const providerRefundId = providerResult?.id;
+    const providerStatus = providerResult?.status;
+
+    if (!providerRefundId || providerStatus !== "COMPLETED") {
+      refund.status = "failed";
+      refund.providerResponse = providerResult || null;
+
+      await refund.save();
+
+      return respond(
+        res,
+        502,
+        false,
+        "PayPal did not confirm the refund as completed."
+      );
+    }
+
+    // ------------------------------------------------------------
+    // STEP 5 — Provider succeeded.
+    //
+    // Now update Refund + Payment atomically.
+    // ------------------------------------------------------------
+    const session = await mongoose.startSession();
+
+    try {
+      let completedRefund;
+
+      await session.withTransaction(async () => {
+        const currentRefund = await Refund.findById(refundId).session(session);
+
+        if (!currentRefund) {
           throw Object.assign(
-            new Error("Refund with this providerRefundId already exists"),
+            new Error("Refund record disappeared before completion"),
+            { status: 500 }
+          );
+        }
+
+        if (currentRefund.status !== "pending") {
+          throw Object.assign(
+            new Error("Refund is no longer pending"),
             { status: 409 }
           );
         }
-      }
 
-      // Create refund record
-      const created = await Refund.create(
-        [
-          {
-            payment: payment._id,
-            appointment: payment.appointment,
-            provider: payment.provider,
-            providerRefundId,
-            amount: refundAmount,
-            currency: payment.currency,
-            reason,
-            status: "pending",
-            initiatedBy: initiatedBy || req.user?._id || null,
-            note,
-            providerResponse,
-          },
-        ],
-        { session }
-      );
-      refund = created[0];
+        const currentPayment = await Payment.findById(
+          currentRefund.payment
+        ).session(session);
 
-      // Update payment refunded amount + status
-      payment.refundedAmount = (payment.refundedAmount || 0) + refundAmount;
-      payment.status =
-        payment.refundedAmount >= payment.amount ? "refunded" : "partially_refunded";
-      await payment.save({ session });
+        if (!currentPayment) {
+          throw Object.assign(
+            new Error("Payment not found while completing refund"),
+            { status: 404 }
+          );
+        }
 
-      // Update appointment payment status to refunded when fully refunded
-      if (payment.status === "refunded") {
-        await Appointment.findByIdAndUpdate(
-          payment.appointment,
-          { paymentStatus: "refunded" },
-          { session }
+        const currentRefundedAmount = Number(
+          currentPayment.refundedAmount || 0
         );
-      }
-    });
 
-    return respond(res, 201, true, "Refund created successfully", refund);
+        const newRefundedAmount =
+          currentRefundedAmount + Number(currentRefund.amount);
+
+        if (newRefundedAmount > Number(currentPayment.amount)) {
+          throw Object.assign(
+            new Error("Refund would exceed payment amount"),
+            { status: 409 }
+          );
+        }
+
+        currentRefund.status = "completed";
+        currentRefund.providerRefundId = providerRefundId;
+        currentRefund.providerResponse = providerResult;
+
+        await currentRefund.save({ session });
+
+        currentPayment.refundedAmount = newRefundedAmount;
+
+        currentPayment.status =
+          newRefundedAmount >= Number(currentPayment.amount)
+            ? "refunded"
+            : "partially_refunded";
+
+        await currentPayment.save({ session });
+
+        if (currentPayment.status === "refunded") {
+          await Appointment.findByIdAndUpdate(
+            currentPayment.appointment,
+            { paymentStatus: "refunded" },
+            { session }
+          );
+        }
+
+        completedRefund = currentRefund;
+      });
+
+      return respond(
+        res,
+        201,
+        true,
+        "Refund processed successfully",
+        completedRefund
+      );
+    } finally {
+      await session.endSession();
+    }
   } catch (error) {
     console.error("createRefund error:", error);
-    return respond(res, error.status || 500, false, error.message);
-  } finally {
-    session.endSession();
+
+    // If an unexpected DB error occurs after the refund record was created,
+    // do not pretend the provider refund failed. The provider may already
+    // have processed it. P0.9/P0.11 will add stronger reconciliation.
+    return respond(
+      res,
+      error.status || 500,
+      false,
+      error.message || "Unable to process refund"
+    );
   }
 };
-
 /**
  * @desc    Mark a refund as completed (after PayPal confirm)
  * @route   PATCH /api/refunds/:id/complete
  * @access  Private/Admin
  */
-export const completeRefund = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { providerRefundId, providerResponse } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return respond(res, 400, false, "Invalid refund id");
-    }
-
-    const refund = await Refund.findById(id);
-    if (!refund) return respond(res, 404, false, "Refund not found");
-
-    if (refund.status === "completed") {
-      return respond(res, 400, false, "Refund is already completed");
-    }
-
-    refund.status = "completed";
-    if (providerRefundId) refund.providerRefundId = providerRefundId;
-    if (providerResponse) refund.providerResponse = providerResponse;
-
-    await refund.save();
-
-    return respond(res, 200, true, "Refund marked as completed", refund);
-  } catch (error) {
-    console.error("completeRefund error:", error);
-    return respond(res, 500, false, error.message);
-  }
-};
 
 /**
- * @desc    Mark a refund as failed
+ * @desc    Manually complete a refund
+ * @route   PATCH /api/refunds/:id/complete
+ * @access  Private/Admin
+ *
+ * P0.6:
+ * Refund completion is provider-controlled.
+ * This endpoint must NOT allow a client to manufacture
+ * a completed refund by submitting a providerRefundId.
+ *
+ * PayPal completion is handled by the provider-processing flow.
+ */
+export const completeRefund = async (req, res) => {
+  return respond(
+    res,
+    409,
+    false,
+    "Refund completion is controlled by the payment provider"
+  );
+};
+/**
+ * @desc    Mark a pending refund as failed
  * @route   PATCH /api/refunds/:id/fail
  * @access  Private/Admin
+ *
+ * P0.6:
+ * A failed pending refund must NOT modify Payment.refundedAmount
+ * because pending refunds are not included in financial totals.
  */
 export const failRefund = async (req, res) => {
-  const session = await mongoose.startSession();
   try {
     const { id } = req.params;
     const { providerResponse, note } = req.body;
@@ -200,56 +351,60 @@ export const failRefund = async (req, res) => {
       return respond(res, 400, false, "Invalid refund id");
     }
 
-    let refund;
+    const refund = await Refund.findById(id);
 
-    await session.withTransaction(async () => {
-      refund = await Refund.findById(id).session(session);
-      if (!refund) throw Object.assign(new Error("Refund not found"), { status: 404 });
+    if (!refund) {
+      return respond(res, 404, false, "Refund not found");
+    }
 
-      if (refund.status === "completed") {
-        throw Object.assign(
-          new Error("Cannot fail an already completed refund"),
-          { status: 400 }
-        );
-      }
-      if (refund.status === "failed") {
-        throw Object.assign(new Error("Refund is already marked as failed"), {
-          status: 400,
-        });
-      }
+    if (refund.status === "completed") {
+      return respond(
+        res,
+        409,
+        false,
+        "Cannot fail a completed refund"
+      );
+    }
 
-      refund.status = "failed";
-      if (providerResponse) refund.providerResponse = providerResponse;
-      if (note) refund.note = note;
-      await refund.save({ session });
+    if (refund.status === "failed") {
+      return respond(
+        res,
+        409,
+        false,
+        "Refund is already marked as failed"
+      );
+    }
 
-      // Rollback the refundedAmount on the Payment since refund failed
-      const payment = await Payment.findById(refund.payment).session(session);
-      if (payment) {
-        payment.refundedAmount = Math.max(
-          0,
-          (payment.refundedAmount || 0) - refund.amount
-        );
+    refund.status = "failed";
 
-        // Recompute status
-        if (payment.refundedAmount <= 0) payment.status = "completed";
-        else if (payment.refundedAmount < payment.amount)
-          payment.status = "partially_refunded";
-        else payment.status = "refunded";
+    if (providerResponse !== undefined) {
+      refund.providerResponse = providerResponse;
+    }
 
-        await payment.save({ session });
-      }
-    });
+    if (note !== undefined) {
+      refund.note = note;
+    }
 
-    return respond(res, 200, true, "Refund marked as failed", refund);
+    await refund.save();
+
+    return respond(
+      res,
+      200,
+      true,
+      "Refund marked as failed",
+      refund
+    );
   } catch (error) {
     console.error("failRefund error:", error);
-    return respond(res, error.status || 500, false, error.message);
-  } finally {
-    session.endSession();
+
+    return respond(
+      res,
+      error.status || 500,
+      false,
+      error.message || "Unable to mark refund as failed"
+    );
   }
 };
-
 /**
  * @desc    Get all refunds (filters + pagination + sorting)
  * @route   GET /api/refunds
@@ -440,10 +595,8 @@ export const updateRefund = async (req, res) => {
     }
 
     const allowed = [
-      "providerRefundId",
       "reason",
       "note",
-      "providerResponse",
     ];
 
     const updates = {};
@@ -474,8 +627,17 @@ export const updateRefund = async (req, res) => {
  * @route   DELETE /api/refunds/:id
  * @access  Private/Admin
  */
+/**
+ * @desc    Delete a refund
+ * @route   DELETE /api/refunds/:id
+ * @access  Private/Admin
+ *
+ * Completed refunds are immutable financial history.
+ * Pending/failed records may be deleted for now.
+ *
+ * P0.12 will harden financial record deletion further.
+ */
 export const deleteRefund = async (req, res) => {
-  const session = await mongoose.startSession();
   try {
     const { id } = req.params;
 
@@ -483,49 +645,41 @@ export const deleteRefund = async (req, res) => {
       return respond(res, 400, false, "Invalid refund id");
     }
 
-    let refund;
+    const refund = await Refund.findById(id);
 
-    await session.withTransaction(async () => {
-      refund = await Refund.findById(id).session(session);
-      if (!refund) throw Object.assign(new Error("Refund not found"), { status: 404 });
+    if (!refund) {
+      return respond(res, 404, false, "Refund not found");
+    }
 
-      if (refund.status === "completed") {
-        throw Object.assign(
-          new Error("Cannot delete a completed refund (financial record)"),
-          { status: 400 }
-        );
-      }
+    if (refund.status === "completed" || refund.status === "failed") {
+      return respond(
+        res,
+        409,
+        false,
+        "Cannot delete a completed or failed refund (financial record history must be preserved)"
+      );
+    }
 
-      // If pending, rollback the refundedAmount on the payment
-      if (refund.status === "pending") {
-        const payment = await Payment.findById(refund.payment).session(session);
-        if (payment) {
-          payment.refundedAmount = Math.max(
-            0,
-            (payment.refundedAmount || 0) - refund.amount
-          );
+    await Refund.findByIdAndDelete(id);
 
-          if (payment.refundedAmount <= 0) payment.status = "completed";
-          else if (payment.refundedAmount < payment.amount)
-            payment.status = "partially_refunded";
-          else payment.status = "refunded";
-
-          await payment.save({ session });
-        }
-      }
-
-      await Refund.findByIdAndDelete(id).session(session);
-    });
-
-    return respond(res, 200, true, "Refund deleted successfully", { id });
+    return respond(
+      res,
+      200,
+      true,
+      "Refund deleted successfully",
+      { id }
+    );
   } catch (error) {
     console.error("deleteRefund error:", error);
-    return respond(res, error.status || 500, false, error.message);
-  } finally {
-    session.endSession();
+
+    return respond(
+      res,
+      error.status || 500,
+      false,
+      error.message || "Unable to delete refund"
+    );
   }
 };
-
 /**
  * @desc    Get refund stats (dashboard)
  * @route   GET /api/refunds/stats

@@ -25,6 +25,8 @@ const refundSchema = new mongoose.Schema(
     providerRefundId: {
       type: String,
       index: true,
+      unique: true,
+      sparse: true,
     },
 
     amount: {

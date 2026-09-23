@@ -26,6 +26,36 @@ import { findOrCreateCustomer } from "../services/customer.service.js";
 /* Constants                                                           */
 /* ------------------------------------------------------------------ */
 
+const isAdminOrOwner = (req) =>
+  req.user?.role === "admin" || req.user?.role === "owner";
+
+const isBarberUser = (req) => req.user?.role === "barber";
+
+const ensureAdminOrAssignedBarber = (req, appointment) => {
+  if (isAdminOrOwner(req)) {
+    return "admin";
+  }
+
+  if (isBarberUser(req)) {
+    if (
+      !req.user?.barberId ||
+      String(req.user.barberId) !== String(appointment.barber)
+    ) {
+      throw new ApiError(
+        403,
+        "You are not authorized to cancel this appointment"
+      );
+    }
+
+    return "barber";
+  }
+
+  throw new ApiError(
+    403,
+    "Only the assigned barber or an admin can perform this cancellation"
+  );
+};
+
 const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 const APPOINTMENT_STATUSES = [
   "pending",
@@ -103,6 +133,9 @@ const createAppointmentSchema = z.object({
   service: z.string().regex(OBJECT_ID_REGEX, "Invalid service ID"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
   startTime: z.string().regex(TIME_REGEX, "startTime must be HH:MM"),
+
+  paymentMethod: z.enum(["online", "pay_at_shop"]),
+
   notes: z.string().trim().max(1000).optional().default(""),
 });
 
@@ -129,10 +162,14 @@ const updateAppointmentSchema = z
   .strict();
 
 const cancelSchema = z.object({
-  cancellationReason: z.string().trim().max(500).optional().default(""),
-  // Who is initiating the cancellation — determines refund policy.
-  cancelledBy: z.enum(["customer", "barber", "admin"]).optional().default("admin"),
+  cancellationReason: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .default(""),
 });
+
 
 const rescheduleSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
@@ -194,22 +231,25 @@ export const createAppointment = asyncHandler(async (req, res) => {
       });
 
       const created = await Appointment.create(
-        [
-          {
-            customer: customer._id,
-            barber: booking.barber._id,
-            service: booking.service._id,
-            date: booking.date,
-            startTime: booking.startTime,
-            endTime: booking.endTime,
-            price: booking.price,
-            status: "confirmed",
-            paymentStatus: "unpaid", // <— explicit; schema default covers it too
-            notes: payload.notes || "",
-          },
-        ],
-        { session }
-      );
+  [
+   {
+  customer: customer._id,
+  barber: booking.barber._id,
+  service: booking.service._id,
+  date: booking.date,
+  startTime: booking.startTime,
+  endTime: booking.endTime,
+  price: booking.price,
+
+  paymentMethod: payload.paymentMethod,
+
+  status: "confirmed",
+  paymentStatus: "unpaid",
+  notes: payload.notes || "",
+}
+  ],
+  { session }
+);
 
       appointment = created[0];
     });
@@ -292,13 +332,60 @@ export const updateAppointment = asyncHandler(async (req, res) => {
  */
 export const cancelAppointment = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { cancellationReason, cancelledBy } = parseOrThrow(
+
+  const { cancellationReason } = parseOrThrow(
     cancelSchema,
     req.body || {}
   );
 
+  if (!req.user) {
+    throw new ApiError(401, "Authentication required");
+  }
+
+  /*
+   * Actor identity comes ONLY from authenticated server-side identity.
+   * Never trust cancelledBy from req.body.
+   */
+  const actorRole = req.user.role;
+
+  if (!["admin", "owner", "barber"].includes(actorRole)) {
+    throw new ApiError(
+      403,
+      "You are not authorized to cancel appointments from this endpoint"
+    );
+  }
+
   const appointment = await loadAppointment(id);
-  ensureStatus(appointment, ["pending", "confirmed"], "cancel");
+
+  /*
+   * Barber authorization:
+   *
+   * req.barber is populated by requireBarber middleware and represents
+   * the authenticated barber's verified Barber document.
+   *
+   * Therefore Barber A cannot cancel Barber B's appointment.
+   */
+  if (actorRole === "barber") {
+    if (!req.barber?._id) {
+      throw new ApiError(403, "Barber authorization required");
+    }
+
+    if (
+      String(appointment.barber) !==
+      String(req.barber._id)
+    ) {
+      throw new ApiError(
+        403,
+        "You are not authorized to cancel this appointment"
+      );
+    }
+  }
+
+  ensureStatus(
+    appointment,
+    ["pending", "confirmed"],
+    "cancel"
+  );
 
   const session = await mongoose.startSession();
   let refundTriggered = false;
@@ -306,26 +393,43 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
   try {
     await session.withTransaction(async () => {
       appointment.status = "cancelled";
-      if (cancellationReason) appointment.cancellationReason = cancellationReason;
 
-      // Auto-refund policy:
-      //   customer → no auto-refund (admin can issue manually)
-      //   barber   → full refund
-      //   admin    → full refund
-      const shouldRefund = cancelledBy === "barber" || cancelledBy === "admin";
+      if (cancellationReason) {
+        appointment.cancellationReason = cancellationReason;
+      }
+
+      /*
+       * Refund policy is determined by SERVER-SIDE ROLE.
+       *
+       * customer -> no automatic refund
+       * barber   -> full remaining refund
+       * admin    -> full remaining refund
+       * owner    -> full remaining refund
+       */
+      const shouldRefund =
+        actorRole === "barber" ||
+        actorRole === "admin" ||
+        actorRole === "owner";
 
       if (shouldRefund) {
         const paid = await Payment.findOne({
           appointment: appointment._id,
-          status: { $in: ["authorized", "completed", "partially_refunded"] },
+          status: {
+            $in: [
+              "authorized",
+              "completed",
+              "partially_refunded",
+            ],
+          },
         }).session(session);
 
         if (paid) {
-          const remaining = paid.amount - (paid.refundedAmount || 0);
+          const remaining =
+            paid.amount - (paid.refundedAmount || 0);
 
           if (remaining > 0) {
             const refundReason =
-              cancelledBy === "barber"
+              actorRole === "barber"
                 ? "barber_cancellation"
                 : "admin_refund";
 
@@ -335,22 +439,34 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
                   payment: paid._id,
                   appointment: appointment._id,
                   provider: paid.provider,
+
+                  // SERVER-DERIVED — never from req.body
                   amount: remaining,
+
                   currency: paid.currency,
                   reason: refundReason,
                   status: "pending",
-                  initiatedBy: req.user?.mongoId || req.user?._id || null,
-                  note: `Auto-generated refund on appointment cancellation (${cancelledBy})`,
+
+                  initiatedBy:
+                    req.user.mongoId ||
+                    req.user._id ||
+                    null,
+
+                  note:
+                    `Auto-generated refund on appointment cancellation (${actorRole})`,
                 },
               ],
               { session }
             );
 
-            paid.refundedAmount = (paid.refundedAmount || 0) + remaining;
+            paid.refundedAmount =
+              (paid.refundedAmount || 0) + remaining;
+
             paid.status =
               paid.refundedAmount >= paid.amount
                 ? "refunded"
                 : "partially_refunded";
+
             await paid.save({ session });
 
             if (paid.status === "refunded") {
@@ -369,7 +485,10 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
 
     return sendSuccess(
       res,
-      { appointment, refundTriggered },
+      {
+        appointment,
+        refundTriggered,
+      },
       "Appointment cancelled successfully"
     );
   } finally {
@@ -542,6 +661,12 @@ export const getMyCustomerAppointments = asyncHandler(async (req, res) => {
   if (!req.user || !req.user.email) {
     throw new ApiError(401, "Authentication required");
   }
+  if (req.user.role !== "customer") {
+  throw new ApiError(
+    403,
+    "Only customers can use customer cancellation"
+  );
+}
 
   const customer = await Customer.findOne({
     $or: [{ userId: req.user.mongoId }, { email: req.user.email }],

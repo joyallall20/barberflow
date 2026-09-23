@@ -24,7 +24,6 @@ const SlideServiceBarber = ({ catalog, navigate }) => {
   const setService = useBookingStore((s) => s.setService);
   const setBarber = useBookingStore((s) => s.setBarber);
   const nextStep = useBookingStore((s) => s.nextStep);
-  const previousStep = useBookingStore((s) => s.previousStep);
 
   const services = catalog?.services || [];
   const barbers = [ANYONE, ...(catalog?.barbers || [])];
@@ -39,110 +38,20 @@ const SlideServiceBarber = ({ catalog, navigate }) => {
       <div>
         <div className="mb-3 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-500">
           <span className="h-px w-8 bg-amber-500" />
-          Step 02 — Service + Barber
+          Step 01 — Barber + Service
         </div>
 
         <h1 className="max-w-2xl text-3xl font-extrabold uppercase leading-[0.95] tracking-tight md:text-4xl lg:text-5xl">
-          What are we doing,
+          Who&apos;s cutting,
           <br />
-          <span className="text-[#8f897e]">and who&apos;s cutting?</span>
+          <span className="text-[#8f897e]">and what are we doing?</span>
         </h1>
       </div>
 
       {/* ---------- Two columns ---------- */}
       <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-12">
-        {/* ---- SERVICES ---- */}
-        <div>
-          <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#8f897e]">
-              Services
-            </span>
-            <span className="text-[10px] uppercase tracking-[0.2em] text-[#625f58]">
-              {services.length} options
-            </span>
-          </div>
-
-          <ul className="flex flex-col">
-            {services.length === 0 && (
-              <li className="border border-white/10 p-5 text-xs uppercase tracking-[0.2em] text-[#625f58]">
-                No services available.
-              </li>
-            )}
-
-            {services.map((s, i) => {
-              const id = pickId(s);
-              const isSelected = id === serviceId;
-
-              return (
-                <motion.li
-                  key={id}
-                  initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{
-                    duration: 0.35,
-                    delay: prefersReducedMotion ? 0 : i * 0.04,
-                    ease: EASE,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setService(s)}
-                    aria-pressed={isSelected}
-                    className={`group flex w-full items-center justify-between gap-4 border-b py-5 text-left transition-colors duration-200 ${
-                      isSelected
-                        ? "border-amber-500"
-                        : "border-white/10 hover:border-white/30"
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      {/* Selection marker */}
-                      <span
-                        className={`flex h-5 w-5 flex-shrink-0 items-center justify-center border transition-all ${
-                          isSelected
-                            ? "border-amber-500 bg-amber-500"
-                            : "border-white/25 group-hover:border-white/50"
-                        }`}
-                      >
-                        {isSelected && (
-                          <Check size={12} strokeWidth={3} className="text-black" />
-                        )}
-                      </span>
-
-                      <div className="min-w-0">
-                        <div
-                          className={`truncate text-sm font-bold uppercase tracking-wider transition-colors ${
-                            isSelected
-                              ? "text-amber-500"
-                              : "text-[#e8e2d6] group-hover:text-white"
-                          }`}
-                        >
-                          {s.name || s.title}
-                        </div>
-
-                        {s.description && (
-                          <div className="mt-0.5 line-clamp-1 text-[11px] text-[#8f897e]">
-                            {s.description}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div
-                      className={`flex-shrink-0 text-sm font-bold transition-colors ${
-                        isSelected ? "text-amber-500" : "text-[#e8e2d6]"
-                      }`}
-                    >
-                      ${s.price ?? "—"}
-                    </div>
-                  </button>
-                </motion.li>
-              );
-            })}
-          </ul>
-        </div>
-
-        {/* ---- BARBERS ---- */}
-        <div>
+        {/* ---- BARBERS (moved first: barber is selected before service) ---- */}
+        <div className="md:order-1">
           <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
             <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#8f897e]">
               Barbers
@@ -252,16 +161,107 @@ const SlideServiceBarber = ({ catalog, navigate }) => {
             chair assigned to you.
           </p>
         </div>
+
+        {/* ---- SERVICES ---- */}
+        <div className="md:order-2">
+          <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#8f897e]">
+              Services
+            </span>
+            <span className="text-[10px] uppercase tracking-[0.2em] text-[#625f58]">
+              {services.length} options
+            </span>
+          </div>
+
+          <ul className="flex flex-col">
+            {services.length === 0 && (
+              <li className="border border-white/10 p-5 text-xs uppercase tracking-[0.2em] text-[#625f58]">
+                No services available.
+              </li>
+            )}
+
+            {services.map((s, i) => {
+              const id = pickId(s);
+              const isSelected = id === serviceId;
+
+              return (
+                <motion.li
+                  key={id}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: 0.35,
+                    delay: prefersReducedMotion ? 0 : i * 0.04,
+                    ease: EASE,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setService(s)}
+                    aria-pressed={isSelected}
+                    className={`group flex w-full items-center justify-between gap-4 border-b py-5 text-left transition-colors duration-200 ${
+                      isSelected
+                        ? "border-amber-500"
+                        : "border-white/10 hover:border-white/30"
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      {/* Selection marker */}
+                      <span
+                        className={`flex h-5 w-5 flex-shrink-0 items-center justify-center border transition-all ${
+                          isSelected
+                            ? "border-amber-500 bg-amber-500"
+                            : "border-white/25 group-hover:border-white/50"
+                        }`}
+                      >
+                        {isSelected && (
+                          <Check size={12} strokeWidth={3} className="text-black" />
+                        )}
+                      </span>
+
+                      <div className="min-w-0">
+                        <div
+                          className={`truncate text-sm font-bold uppercase tracking-wider transition-colors ${
+                            isSelected
+                              ? "text-amber-500"
+                              : "text-[#e8e2d6] group-hover:text-white"
+                          }`}
+                        >
+                          {s.name || s.title}
+                        </div>
+
+                        {s.description && (
+                          <div className="mt-0.5 line-clamp-1 text-[11px] text-[#8f897e]">
+                            {s.description}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div
+                      className={`flex-shrink-0 text-sm font-bold transition-colors ${
+                        isSelected ? "text-amber-500" : "text-[#e8e2d6]"
+                      }`}
+                    >
+                      ${s.price ?? "—"}
+                    </div>
+                  </button>
+                </motion.li>
+              );
+            })}
+          </ul>
+        </div>
       </div>
 
       {/* ---------- Footer nav ---------- */}
       <div className="flex items-center justify-between border-t border-white/10 pt-6">
+        {/* Step 01: no previous step in the booking flow — "Back" exits to home */}
         <button
           type="button"
-          onClick={() => previousStep()}
+          onClick={() => navigate?.("/")}
           className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8f897e] transition-colors hover:text-amber-500"
         >
-          <ChevronLeft size={14} /> Back
+          <ChevronLeft size={14} /> The Foundry
         </button>
 
         <button

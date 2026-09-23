@@ -1,10 +1,10 @@
 import { motion, useReducedMotion } from "framer-motion";
 
 const STEPS = [
-  { n: "01", label: "Date", full: "Date" },
-  { n: "02", label: "Service + Barber", short: "Service" },
+  { n: "01", label: "Barber + Service", short: "Barber" },
+  { n: "02", label: "Date", full: "Date" },
   { n: "03", label: "Time", full: "Time" },
-  { n: "04", label: "Details", full: "Details" },
+  { n: "04", label: "Confirm", full: "Confirm" },
 ];
 
 const BookingProgress = ({ currentStep = 1 }) => {

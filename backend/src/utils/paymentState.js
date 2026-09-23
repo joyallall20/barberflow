@@ -1,4 +1,4 @@
- const PAYMENT_STATUSES = [
+ export const PAYMENT_STATUSES = [
   "pending",
   "authorized",
   "completed",
@@ -8,7 +8,7 @@
   "cancelled",
 ];
 
-const ALLOWED_TRANSITIONS = {
+export const ALLOWED_TRANSITIONS = {
   pending: new Set([
     "authorized",
     "completed",

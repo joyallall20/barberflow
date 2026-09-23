@@ -2,6 +2,7 @@
 import Payment from "../models/Payment.js";
 import Appointment from "../models/Appointment.js";
 import mongoose from "mongoose";
+import { createPaypalOrder, capturePaypalOrder } from "../services/paypal.service.js";
 import {
   PAYMENT_STATUSES,
   assertPaymentTransition,
@@ -38,16 +39,6 @@ const respond = (res, status, success, message, data = null) =>
  * @desc    Create a new payment record
  * @route   POST /api/payments
  * @access  Private
- */
-/**
- * @desc    Create a new payment record securely
- * @route   POST /api/payments
- * @access  Private
- */
-/**
- * @desc    Create a new payment record
- * @route   POST /api/payments
- * @access  Private
  *
  * SECURITY:
  * - Client provides only the appointment ID.
@@ -60,6 +51,7 @@ const respond = (res, status, success, message, data = null) =>
  * - Provider is server-controlled.
  * - Provider IDs are NOT accepted from the client.
  * - Deposit pricing is NOT invented here.
+ * - PayPal order is created server-side using ONLY server-derived data.
  */
 export const createPayment = async (req, res) => {
   try {
@@ -91,12 +83,21 @@ export const createPayment = async (req, res) => {
     // ------------------------------------------------------------
     // 3. Load appointment + service from the database
     // ------------------------------------------------------------
-    const appointment = await Appointment.findById(appointmentId).populate(
-      "service"
-    );
+    const appointment = await Appointment.findById(appointmentId)
+      .populate("service")
+      .populate("customer", "email");
 
     if (!appointment) {
       return respond(res, 404, false, "Appointment not found");
+    }
+
+    if (appointment.paymentMethod !== "online") {
+      return respond(
+        res,
+        409,
+        false,
+        "This appointment was booked for payment at the shop"
+      );
     }
 
     // ------------------------------------------------------------
@@ -197,22 +198,16 @@ export const createPayment = async (req, res) => {
     }
 
     // ------------------------------------------------------------
-    // 8. Payment type is currently server-controlled.
-    //
-    // No deposit percentage is defined by the existing backend
-    // architecture, so we must not invent one here.
-    //
-    // P0.1 therefore creates a full_payment record only.
-    // Deposit support should be implemented separately once the
-    // application's actual deposit business rule is established.
+    // 8. Payment type is server-controlled.
     // ------------------------------------------------------------
     const type = "full_payment";
 
     // ------------------------------------------------------------
     // 9. Prevent another active payment for this appointment
     //
-    // This is not the final race/idempotency solution.
-    // P0.8/P0.11 will add stronger database-level protection.
+    // IMPORTANT:
+    // Check this BEFORE creating a PayPal order.
+    // Otherwise a retry could create multiple PayPal orders.
     // ------------------------------------------------------------
     const existingPayment = await Payment.findOne({
       appointment: appointment._id,
@@ -231,12 +226,58 @@ export const createPayment = async (req, res) => {
     }
 
     // ------------------------------------------------------------
-    // 10. Create payment using ONLY server-derived financial data
+    // 10. Create PayPal order using ONLY server-derived data.
+    //
+    // The client never supplies:
+    // - amount
+    // - currency
+    // - reference ID
+    // - PayPal order ID
+    // ------------------------------------------------------------
+    let paypalOrder;
+
+    try {
+      paypalOrder = await createPaypalOrder({
+        amount,
+        currency: "USD",
+        referenceId: appointment._id.toString(),
+      });
+    } catch (error) {
+      console.error("PayPal order creation failed:", error);
+
+      return respond(
+        res,
+        502,
+        false,
+        "Unable to initialize PayPal payment"
+      );
+    }
+
+    const paypalOrderId = paypalOrder?.id;
+
+    if (!paypalOrderId) {
+      console.error(
+        "PayPal order creation returned no order ID:",
+        paypalOrder
+      );
+
+      return respond(
+        res,
+        502,
+        false,
+        "PayPal did not return a valid order ID"
+      );
+    }
+
+    // ------------------------------------------------------------
+    // 11. Create our internal payment record.
+    //
+    // providerOrderId comes ONLY from PayPal.
     // ------------------------------------------------------------
     const payment = await Payment.create({
       appointment: appointment._id,
 
-      // Payment.customer references User, not Customer.
+      // Payment.customer references the authenticated User.
       customer: req.user.mongoId,
 
       // Barber comes from the appointment.
@@ -245,29 +286,38 @@ export const createPayment = async (req, res) => {
       // Provider is server-controlled.
       provider: "paypal",
 
-      // Provider IDs are intentionally NOT accepted from the client.
-      // They will be associated only through trusted PayPal flow.
+      // Trusted PayPal-generated order ID.
+      providerOrderId: paypalOrderId,
 
+      // Amount comes from the appointment snapshot.
       amount,
+
       currency: "USD",
+
       type,
 
-      // Initial state is server-controlled.
+      // Payment starts pending until server-side capture verification.
       status: "pending",
 
-      // Never accept refundedAmount from the client.
       refundedAmount: 0,
 
-      // Never accept arbitrary financial metadata from the client.
       metadata: {},
     });
 
+    // ------------------------------------------------------------
+    // 12. Return BOTH our payment and the PayPal order ID.
+    //
+    // Frontend needs paypalOrderId to render PayPalButtons.
+    // ------------------------------------------------------------
     return respond(
       res,
       201,
       true,
       "Payment created successfully",
-      payment
+      {
+        payment,
+        paypalOrderId,
+      }
     );
   } catch (error) {
     console.error("createPayment error:", error);
@@ -280,6 +330,7 @@ export const createPayment = async (req, res) => {
     );
   }
 };
+
 /**
  * @desc    Get all payments (with filters, pagination, sorting)
  * @route   GET /api/payments
@@ -457,6 +508,234 @@ export const getPaymentByOrderId = async (req, res) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Capture a PayPal payment after the order has been approved on the client side.
+// ---------------------------------------------------------------------------
+export const capturePayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { orderId } = req.body;
+
+    // Validate payment id
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return respond(res, 400, false, "Invalid payment id");
+    }
+
+    // Validate orderId in body
+    if (!orderId || typeof orderId !== "string") {
+      return respond(res, 400, false, "orderId is required");
+    }
+
+    const payment = await Payment.findById(id);
+    if (!payment) {
+      return respond(res, 404, false, "Payment not found");
+    }
+
+    // Ensure the authenticated user owns the payment (or is admin/owner)
+    try {
+      ensurePaymentAccess(req, payment);
+    } catch (error) {
+      return respond(res, error.status || 404, false, error.message);
+    }
+
+    // Verify provider is PayPal
+    if (payment.provider !== "paypal") {
+      return respond(res, 400, false, "Payment provider is not PayPal");
+    }
+
+    // Idempotent: if already completed, return the payment unchanged
+    if (payment.status === "completed") {
+      return respond(res, 200, true, "Payment already captured", payment);
+    }
+
+    // Verify orderId matches the stored providerOrderId
+    if (payment.providerOrderId !== orderId) {
+      return respond(res, 400, false, "orderId does not match payment's providerOrderId");
+    }
+
+    // Only allow capture from pending or authorized states
+    if (!["pending", "authorized"].includes(payment.status)) {
+      return respond(res, 409, false, `Cannot capture payment in status ${payment.status}`);
+    }
+
+    // Validate state transition
+    try {
+      assertPaymentTransition(payment.status, "completed");
+    } catch (e) {
+      return respond(res, 409, false, e.message);
+    }
+
+    // Perform PayPal capture
+    let captureResponse;
+    try {
+      captureResponse = await capturePaypalOrder(payment.providerOrderId);
+    } catch (e) {
+      console.error("capturePaypalOrder error:", e);
+      return respond(res, 502, false, "Failed to capture payment with PayPal");
+    }
+
+    // Basic sanity checks on PayPal response
+    if (!captureResponse || captureResponse.id !== payment.providerOrderId) {
+      console.error("PayPal capture order ID mismatch", captureResponse);
+      return respond(res, 502, false, "PayPal capture response order ID mismatch");
+    }
+
+    const purchaseUnit = (captureResponse.purchase_units && captureResponse.purchase_units[0]) || {};
+    const captures = purchaseUnit.payments && purchaseUnit.payments.captures;
+    const captureInfo = Array.isArray(captures) ? captures[0] : null;
+
+    if (!captureInfo || captureInfo.status !== "COMPLETED") {
+      console.error("PayPal capture not completed", captureInfo);
+      return respond(res, 502, false, "PayPal capture not completed");
+    }
+
+    const capturedAmount = captureInfo.amount?.value;
+    const capturedCurrency = captureInfo.amount?.currency_code;
+    if (Number(capturedAmount) !== Number(payment.amount) || capturedCurrency !== payment.currency) {
+      console.error("Capture amount/currency mismatch", capturedAmount, capturedCurrency);
+      return respond(res, 502, false, "Captured amount or currency does not match payment");
+    }
+
+    // Persist PayPal capture details and transition payment state
+    payment.providerCaptureId = captureInfo.id;
+    payment.status = "completed";
+    await payment.save();
+
+    // Update related appointment payment status, if linked
+    if (payment.appointment) {
+      try {
+        const appointment = await Appointment.findById(payment.appointment);
+        if (appointment) {
+          appointment.paymentStatus = "paid";
+          await appointment.save();
+        }
+      } catch (e) {
+        console.error("Failed to update appointment paymentStatus:", e);
+        // Non‑critical – continue
+      }
+    }
+
+    return respond(res, 200, true, "Payment captured successfully", payment);
+  } catch (error) {
+    console.error("capturePayment error:", error);
+    return respond(res, 500, false, "Unable to capture payment");
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Capture a PayPal payment after the order has been approved on the client side.
+// ---------------------------------------------------------------------------
+const capturePaymentDuplicate = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { orderId } = req.body;
+
+    // Validate payment id
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return respond(res, 400, false, "Invalid payment id");
+    }
+
+    // Validate orderId in body
+    if (!orderId || typeof orderId !== "string") {
+      return respond(res, 400, false, "orderId is required");
+    }
+
+    const payment = await Payment.findById(id);
+    if (!payment) {
+      return respond(res, 404, false, "Payment not found");
+    }
+
+    // Ensure the authenticated user owns the payment (or is admin/owner)
+    try {
+      ensurePaymentAccess(req, payment);
+    } catch (error) {
+      return respond(res, error.status || 404, false, error.message);
+    }
+
+    // Verify provider is PayPal
+    if (payment.provider !== "paypal") {
+      return respond(res, 400, false, "Payment provider is not PayPal");
+    }
+
+    // Idempotent: if already completed, return the payment unchanged
+    if (payment.status === "completed") {
+      return respond(res, 200, true, "Payment already captured", payment);
+    }
+
+    // Verify orderId matches the stored providerOrderId
+    if (payment.providerOrderId !== orderId) {
+      return respond(res, 400, false, "orderId does not match payment's providerOrderId");
+    }
+
+    // Only allow capture from pending or authorized states
+    if (!["pending", "authorized"].includes(payment.status)) {
+      return respond(res, 409, false, `Cannot capture payment in status ${payment.status}`);
+    }
+
+    // Validate state transition
+    try {
+      assertPaymentTransition(payment.status, "completed");
+    } catch (e) {
+      return respond(res, 409, false, e.message);
+    }
+
+    // Perform PayPal capture
+    let captureResponse;
+    try {
+      captureResponse = await capturePaypalOrder(payment.providerOrderId);
+    } catch (e) {
+      console.error("capturePaypalOrder error:", e);
+      return respond(res, 502, false, "Failed to capture payment with PayPal");
+    }
+
+    // Basic sanity checks on PayPal response
+    if (!captureResponse || captureResponse.id !== payment.providerOrderId) {
+      console.error("PayPal capture order ID mismatch", captureResponse);
+      return respond(res, 502, false, "PayPal capture response order ID mismatch");
+    }
+
+    const purchaseUnit = (captureResponse.purchase_units && captureResponse.purchase_units[0]) || {};
+    const captures = purchaseUnit.payments && purchaseUnit.payments.captures;
+    const captureInfo = Array.isArray(captures) ? captures[0] : null;
+
+    if (!captureInfo || captureInfo.status !== "COMPLETED") {
+      console.error("PayPal capture not completed", captureInfo);
+      return respond(res, 502, false, "PayPal capture not completed");
+    }
+
+    const capturedAmount = captureInfo.amount?.value;
+    const capturedCurrency = captureInfo.amount?.currency_code;
+    if (Number(capturedAmount) !== Number(payment.amount) || capturedCurrency !== payment.currency) {
+      console.error("Capture amount/currency mismatch", capturedAmount, capturedCurrency);
+      return respond(res, 502, false, "Captured amount or currency does not match payment");
+    }
+
+    // Persist PayPal capture details and transition payment state
+    payment.providerCaptureId = captureInfo.id;
+    payment.status = "completed";
+    await payment.save();
+
+    // Update related appointment payment status, if linked
+    if (payment.appointment) {
+      try {
+        const appointment = await Appointment.findById(payment.appointment);
+        if (appointment) {
+          appointment.paymentStatus = "paid";
+          await appointment.save();
+        }
+      } catch (e) {
+        console.error("Failed to update appointment paymentStatus:", e);
+        // Non‑critical – continue
+      }
+    }
+
+    return respond(res, 200, true, "Payment captured successfully", payment);
+  } catch (error) {
+    console.error("capturePayment error:", error);
+    return respond(res, 500, false, "Unable to capture payment");
+  }
+};
+
 /**
  * @desc    Update a payment (generic fields)
  * @route   PUT /api/payments/:id
@@ -524,50 +803,100 @@ export const updatePayment = async (req, res) => {
 };
 
 /**
- * @desc    Process a refund (full or partial)
- * @route   POST /api/payments/:id/refund
+ * @desc    Update payment status through the controlled state machine
+ * @route   PATCH /api/admin/payments/:id/status
  * @access  Private/Admin
  */
-export const refundPayment = async (req, res) => {
+export const updatePaymentStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { amount } = req.body; // optional, defaults to full remaining
+    const { status, failureReason } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return respond(res, 400, false, "Invalid payment id");
+    }
+
+    if (!status || !PAYMENT_STATUSES.includes(status)) {
+      return respond(res, 400, false, "Invalid payment status");
+    }
 
     const payment = await Payment.findById(id);
+
     if (!payment) {
       return respond(res, 404, false, "Payment not found");
     }
 
-    if (payment.status !== "completed" && payment.status !== "partially_refunded") {
-      return respond(res, 400, false, "Only completed payments can be refunded");
-    }
-
-    const remaining = payment.amount - payment.refundedAmount;
-    const refundAmount = amount !== undefined ? Number(amount) : remaining;
-
-    if (refundAmount <= 0 || refundAmount > remaining) {
+    // ------------------------------------------------------------
+    // P0.3 — Enforce the payment state machine.
+    //
+    // This prevents arbitrary status changes such as:
+    // completed -> pending
+    // refunded -> completed
+    // failed -> completed
+    // ------------------------------------------------------------
+    try {
+      assertPaymentTransition(payment.status, status);
+    } catch (error) {
       return respond(
         res,
-        400,
+        409,
         false,
-        `Refund amount must be between 0 and ${remaining}`
+        error.message || "Invalid payment status transition"
       );
     }
 
-    // NOTE: integrate with PayPal refund API here.
-    // const refundResult = await paypal.refundCapture(payment.providerCaptureId, refundAmount);
+    // ------------------------------------------------------------
+    // Failure reason is only meaningful for failed payments.
+    // ------------------------------------------------------------
+    if (status === "failed" && failureReason !== undefined) {
+      payment.failureReason = failureReason;
+    }
 
-    payment.refundedAmount += refundAmount;
-    payment.status =
-      payment.refundedAmount >= payment.amount ? "refunded" : "partially_refunded";
+    payment.status = status;
 
     await payment.save();
 
-    return respond(res, 200, true, "Refund processed successfully", payment);
+    return respond(
+      res,
+      200,
+      true,
+      "Payment status updated successfully",
+      payment
+    );
   } catch (error) {
-    console.error("refundPayment error:", error);
-    return respond(res, 500, false, error.message);
+    console.error("updatePaymentStatus error:", error);
+
+    return respond(
+      res,
+      500,
+      false,
+      "Unable to update payment status"
+    );
   }
+};
+
+/**
+ * @desc    Process a refund (full or partial)
+ * @route   POST /api/payments/:id/refund
+ * @access  Private/Admin
+ */
+/**
+ * @desc    Process a refund
+ * @route   POST /api/payments/:id/refund
+ * @access  Private/Admin
+ *
+ * P0.6:
+ * Refund lifecycle is owned by refund.controller.js.
+ *
+ * Do not maintain a second refund implementation here.
+ */
+export const refundPayment = async (req, res) => {
+  return respond(
+    res,
+    409,
+    false,
+    "Use the refund lifecycle endpoint to process refunds"
+  );
 };
 
 /**
@@ -583,10 +912,17 @@ export const deletePayment = async (req, res) => {
       return respond(res, 400, false, "Invalid payment id");
     }
 
-    const payment = await Payment.findByIdAndDelete(id);
+    const payment = await Payment.findById(id);
     if (!payment) {
       return respond(res, 404, false, "Payment not found");
     }
+
+    // P0.12: Financial record deletion protection
+    if (["completed", "refunded", "partially_refunded", "authorized"].includes(payment.status)) {
+      return respond(res, 409, false, "Cannot delete financial records that have been authorized, completed, or refunded.");
+    }
+
+    await Payment.findByIdAndDelete(id);
 
     return respond(res, 200, true, "Payment deleted successfully", { id });
   } catch (error) {

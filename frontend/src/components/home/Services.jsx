@@ -108,11 +108,11 @@ const Services = () => {
               <span className="absolute left-0 top-0 h-full w-[2px] origin-top scale-y-0 bg-amber-500 transition-transform duration-300 group-hover:scale-y-100" />
 
               <div className="flex flex-col gap-2 pl-4 md:flex-row md:items-baseline md:justify-between md:gap-6">
-                <div className="flex items-baseline gap-4 md:gap-6">
-                  <span className="text-2xl font-extrabold tracking-tight text-[#a89f8f] transition-colors duration-300 group-hover:text-amber-500 md:text-3xl">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pr-4 md:flex-nowrap md:gap-x-6 md:pr-0">
+                  <span className="text-xl font-extrabold tracking-tight text-[#a89f8f] transition-colors duration-300 group-hover:text-amber-500 sm:text-2xl md:text-3xl">
                     {num}
                   </span>
-                  <span className="text-xl font-bold uppercase tracking-tight text-[#e8e2d6] md:text-2xl">
+                  <span className="text-base font-bold uppercase tracking-tight text-[#e8e2d6] sm:text-xl md:text-2xl">
                     {name}
                   </span>
                 </div>

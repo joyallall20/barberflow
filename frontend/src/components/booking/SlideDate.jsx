@@ -91,7 +91,7 @@ const SlideDate = ({ navigate }) => {
       <div>
         <div className="mb-3 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-500">
           <span className="h-px w-8 bg-amber-500" />
-          Step 01 — Date
+          Step 02 — Date
         </div>
 
         <h1 className="max-w-2xl text-3xl font-extrabold uppercase leading-[0.95] tracking-tight md:text-4xl lg:text-5xl">
@@ -227,13 +227,10 @@ const SlideDate = ({ navigate }) => {
       <div className="flex items-center justify-between border-t border-white/10 pt-6">
         <button
           type="button"
-          onClick={() => {
-            previousStep();
-            navigate?.("/");
-          }}
+          onClick={() => previousStep()}
           className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8f897e] transition-colors hover:text-amber-500"
         >
-          <ChevronLeft size={14} /> Back
+          <ChevronLeft size={14} /> Back to Barber & Service
         </button>
 
         <button

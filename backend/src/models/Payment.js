@@ -33,11 +33,15 @@ const paymentSchema = new mongoose.Schema(
     providerOrderId: {
       type: String,
       index: true,
+      unique: true,
+      sparse: true,
     },
 
     providerCaptureId: {
       type: String,
       index: true,
+      unique: true,
+      sparse: true,
     },
 
     amount: {

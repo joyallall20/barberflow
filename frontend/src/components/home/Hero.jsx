@@ -79,13 +79,13 @@ const Hero = () => {
             {/* Main heading */}
             <motion.h1
               variants={fadeUp}
-              className="mb-4 text-5xl font-extrabold uppercase leading-[0.92] tracking-tight sm:text-6xl md:text-[4.5rem] lg:text-[5.25rem]"
+              className="mb-4 text-3xl font-extrabold uppercase leading-[0.96] tracking-tight sm:text-4xl sm:leading-[0.94] md:text-[4.5rem] md:leading-[0.92] lg:text-[5.25rem]"
             >
-              <span className="block whitespace-nowrap">
+              <span className="block md:whitespace-nowrap">
                 Old-School Craft.
               </span>
 
-              <span className="block whitespace-nowrap text-amber-500">
+              <span className="block text-amber-500 md:whitespace-nowrap">
                 Modern Austin.
               </span>
             </motion.h1>
@@ -105,7 +105,7 @@ const Hero = () => {
                 onClick={() => {
                   window.location.href = "/book";
                 }}
-                className="border border-amber-500 bg-amber-500 px-7 py-3.5 text-xs font-bold uppercase tracking-[0.15em] text-black transition-all duration-300 hover:bg-transparent hover:text-amber-500"
+                className="w-full border border-amber-500 bg-amber-500 px-7 py-3.5 text-xs font-bold uppercase tracking-[0.15em] text-black transition-all duration-300 hover:bg-transparent hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black sm:w-auto"
               >
                 Book a Cut
               </button>

@@ -1,6 +1,7 @@
-// src/services/paypal.service.js
 import "dotenv/config";
 
+// Enforce Sandbox by explicitly checking for "sandbox" default
+// (Or set this explicitly to "https://api-m.sandbox.paypal.com" if you want to hardcode sandbox mode)
 const PAYPAL_API_BASE =
   process.env.PAYPAL_ENV === "live"
     ? "https://api-m.paypal.com"
@@ -25,7 +26,21 @@ const getAccessToken = async () => {
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`PayPal auth failed: ${res.status} ${errText}`);
+
+    console.error("PayPal OAuth Debug:", {
+      status: res.status,
+      endpoint: `${PAYPAL_API_BASE}/v1/oauth2/token`,
+      environment: process.env.PAYPAL_ENV,
+      clientIdLoaded: Boolean(process.env.PAYPAL_CLIENT_ID),
+      clientSecretLoaded: Boolean(process.env.PAYPAL_CLIENT_SECRET),
+      clientIdLength: process.env.PAYPAL_CLIENT_ID?.length,
+      clientSecretLength: process.env.PAYPAL_CLIENT_SECRET?.length,
+      response: errText,
+    });
+
+    throw new Error(
+      `PayPal auth failed: ${res.status} ${errText}`
+    );
   }
 
   const data = await res.json();
@@ -43,8 +58,11 @@ export const verifyPaypalWebhook = async ({ headers, rawBody }) => {
   try {
     const webhookId = process.env.PAYPAL_WEBHOOK_ID;
     if (!webhookId) {
-      console.warn("PAYPAL_WEBHOOK_ID not set — skipping signature verification");
-      return true; // Allow in dev only; remove in production
+      console.warn("PAYPAL_WEBHOOK_ID not set.");
+      if (process.env.NODE_ENV === "production") {
+        return false; // MUST fail closed in production
+      }
+      return true; // Allow in dev only
     }
 
     const accessToken = await getAccessToken();

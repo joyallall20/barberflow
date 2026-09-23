@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft, Check, AlertCircle, Loader2 } from "lucide-react";
 import useBookingStore from "../../store/bookingStore";
@@ -60,7 +60,7 @@ const validate = ({ name, phone, email }) => {
 
 /* ---------- component ---------- */
 
-const SlideDetails = ({ navigate }) => {
+const SlideConfirm = ({ navigate }) => {
   const prefersReducedMotion = useReducedMotion();
 
   const date = useBookingStore((s) => s.date);
@@ -95,6 +95,32 @@ const SlideDetails = ({ navigate }) => {
 
   const authUser = useAuthStore((s) => s.user);
   const authLoading = useAuthStore((s) => s.loading);
+
+  // Prefill known customer details from the authenticated user so we don't
+  // ask for information that's already on file. Only fills fields that are
+  // still empty — never overwrites something the customer already typed.
+  // NOTE: field names here (displayName/name, email, phone/phoneNumber) are
+  // a best guess since authStore.js wasn't available to inspect — verify
+  // against your actual auth user shape.
+  useEffect(() => {
+    if (!authUser) return;
+
+    const prefill = {};
+    if (!customer.name && (authUser.name || authUser.displayName)) {
+      prefill.name = authUser.name || authUser.displayName;
+    }
+    if (!customer.email && authUser.email) {
+      prefill.email = authUser.email;
+    }
+    if (!customer.phone && (authUser.phone || authUser.phoneNumber)) {
+      prefill.phone = authUser.phone || authUser.phoneNumber;
+    }
+
+    if (Object.keys(prefill).length > 0) {
+      setCustomer(prefill);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser]);
 
   const setField = (field) => (e) => {
     setCustomer({
@@ -266,7 +292,7 @@ const SlideDetails = ({ navigate }) => {
       <div>
         <div className="mb-3 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-500">
           <span className="h-px w-8 bg-amber-500" />
-          Step 04 — Details
+          Step 04 — Confirm
         </div>
 
         <h1 className="max-w-2xl text-3xl font-extrabold uppercase leading-[0.95] tracking-tight md:text-4xl lg:text-5xl">
@@ -286,19 +312,23 @@ const SlideDetails = ({ navigate }) => {
         </div>
 
         <dl className="divide-y divide-white/10">
-          <ReceiptRow label="Date" value={formatDateLine(date)} />
-
-          <ReceiptRow label="Time" value={to12h(time)} />
+          <ReceiptRow
+            label="Barber"
+            value={barber?.isAnyone ? "Anyone Available" : barber?.name || "—"}
+          />
 
           <ReceiptRow
             label="Service"
             value={service?.name || service?.title || "—"}
           />
 
-          <ReceiptRow
-            label="Barber"
-            value={barber?.isAnyone ? "Anyone Available" : barber?.name || "—"}
-          />
+          {service?.duration != null && (
+            <ReceiptRow label="Duration" value={`${service.duration} min`} />
+          )}
+
+          <ReceiptRow label="Date" value={formatDateLine(date)} />
+
+          <ReceiptRow label="Time" value={to12h(time)} />
 
           {service?.price != null && (
             <ReceiptRow label="Price" value={`$${service.price}`} emphasis />
@@ -501,7 +531,7 @@ const SlideDetails = ({ navigate }) => {
           className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8f897e] transition-colors hover:text-amber-500 disabled:opacity-40"
         >
           <ChevronLeft size={14} />
-          Back
+          Back to Time
         </button>
 
         {phase === "idle" ||
@@ -532,8 +562,8 @@ const SlideDetails = ({ navigate }) => {
                 <Check size={14} />
 
                 {paymentMethod === "online"
-                  ? "Continue to Payment"
-                  : "Book & Pay at Shop"}
+                  ? "Confirm & Pay"
+                  : "Confirm Booking"}
               </>
             )}
           </button>
@@ -624,4 +654,4 @@ const Field = ({
   );
 };
 
-export default SlideDetails;
+export default SlideConfirm;

@@ -10,7 +10,7 @@ import BookingProgress from "../components/booking/BookingProgress";
 import SlideDate from "../components/booking/SlideDate";
 import SlideServiceBarber from "../components/booking/SlideServiceBarber";
 import SlideTime from "../components/booking/SlideTime";
-import SlideDetails from "../components/booking/SlideDetails";
+import SlideConfirm from "../components/booking/SlideConfirm";
 
 const EASE = [0.22, 1, 0.36, 1];
 
@@ -113,12 +113,13 @@ const Book = () => {
   }, [catalog.loading, catalog.error, catalog.services, catalog.barbers]);
 
   // ---- Guard: keep step consistent with selection state ----
+  // New order: 1 Barber+Service -> 2 Date -> 3 Time -> 4 Confirm
   useEffect(() => {
-    const { date, service, barber, time } = useBookingStore.getState();
+    const { service, barber, date, time } = useBookingStore.getState();
 
-    if (step === 2 && !date) setStep(1);
-    if (step === 3 && (!date || !service || !barber)) setStep(2);
-    if (step === 4 && (!date || !service || !barber || !time)) setStep(3);
+    if (step === 2 && (!service || !barber)) setStep(1);
+    if (step === 3 && (!service || !barber || !date)) setStep(2);
+    if (step === 4 && (!service || !barber || !date || !time)) setStep(3);
   }, [step, setStep]);
 
   const slideProps = { catalog, navigate };
@@ -175,10 +176,10 @@ const Book = () => {
                 transition={{ duration: 0.45, ease: EASE }}
                 className="h-full"
               >
-                {step === 1 && <SlideDate {...slideProps} />}
-                {step === 2 && <SlideServiceBarber {...slideProps} />}
+                {step === 1 && <SlideServiceBarber {...slideProps} />}
+                {step === 2 && <SlideDate {...slideProps} />}
                 {step === 3 && <SlideTime {...slideProps} />}
-                {step === 4 && <SlideDetails {...slideProps} />}
+                {step === 4 && <SlideConfirm {...slideProps} />}
               </motion.div>
             </AnimatePresence>
           )}

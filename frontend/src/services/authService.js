@@ -44,6 +44,10 @@ export const sendPasswordReset = async (email) => {
   await sendPasswordResetEmail(auth, email);
 };
 
+export const getIdToken = async (forceRefresh = false) => {
+  return auth.currentUser ? await auth.currentUser.getIdToken(forceRefresh) : null;
+};
+
 /* ------------------------------------------------------------------ */
 /* Google sign-in                                                      */
 /* ------------------------------------------------------------------ */

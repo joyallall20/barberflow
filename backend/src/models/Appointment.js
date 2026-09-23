@@ -19,13 +19,21 @@ const appointmentSchema = new mongoose.Schema(
       ref: "Service",
       required: true,
     },
- 
-paymentStatus: {
-  type: String,
-  enum: ["unpaid", "deposit_paid", "paid", "refunded"],
-  default: "unpaid",
-  index: true,
-},
+
+    paymentMethod: {
+      type: String,
+      enum: ["online", "pay_at_shop"],
+      required: true,
+      default: "pay_at_shop",
+      index: true,
+    },
+
+    paymentStatus: {
+      type: String,
+      enum: ["unpaid", "deposit_paid", "paid", "refunded"],
+      default: "unpaid",
+      index: true,
+    },
 
     date: {
       type: Date,
@@ -102,6 +110,7 @@ appointmentSchema.index({
   startTime: 1,
   endTime: 1,
 });
+
 appointmentSchema.index({
   barber: 1,
   date: 1,

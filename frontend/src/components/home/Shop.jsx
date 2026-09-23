@@ -176,7 +176,7 @@ const Shop = () => {
               href={MAP_DIRECTIONS}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-8 inline-flex w-fit items-center gap-3 bg-[#141311] px-6 py-3 text-xs font-bold uppercase tracking-[0.2em] text-[#e8e2d6] transition-colors hover:bg-amber-600 hover:text-[#141311]"
+              className="mt-8 inline-flex w-full items-center justify-center gap-3 bg-[#141311] px-6 py-3.5 text-xs font-bold uppercase tracking-[0.2em] text-[#e8e2d6] transition-colors hover:bg-amber-600 hover:text-[#141311] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#e8e2d6] sm:w-fit sm:justify-start sm:py-3"
             >
               Get Directions
               <span aria-hidden>→</span>
@@ -197,7 +197,7 @@ const Shop = () => {
             South Austin · Demo Map
           </div>
 
-          <div className="relative h-[280px] w-full overflow-hidden border border-black/15 md:h-[360px]">
+          <div className="relative h-[220px] w-full overflow-hidden border border-black/15 sm:h-[280px] md:h-[360px]">
             <iframe
               title="Map of The Foundry demo location in South Austin, Texas"
               src={MAP_EMBED}
