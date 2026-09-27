@@ -1,4 +1,5 @@
-// ALWAYS put import "dotenv/config" at line 1 in ES Modules
+
+/* ALWAYS put dotenv/config at line 1 in ES Modules */
 import "dotenv/config";
 
 import express from "express";
@@ -7,7 +8,10 @@ import cors from "cors";
 import helmet from "helmet";
 
 import apiRouter from "./src/routes/index.js";
-import { notFoundHandler, errorHandler } from "./src/middleware/error.js";
+import {
+  notFoundHandler,
+  errorHandler,
+} from "./src/middleware/error.js";
 import { apiLimiter } from "./src/middleware/rateLimiter.js";
 import { handlePaypalWebhook } from "./src/controllers/webhook.controller.js";
 
@@ -17,9 +21,7 @@ const PORT = process.env.PORT || 5000;
 // --------------------------------------------------
 // PayPal Config Log
 // --------------------------------------------------
-// This does NOT expose the actual Client ID or Secret.
-// It only confirms whether the environment variables
-// are being loaded correctly.
+
 const paypalBaseUrl =
   process.env.PAYPAL_ENV === "live"
     ? "https://api-m.paypal.com"
@@ -68,7 +70,9 @@ app.use(
         return callback(null, true);
       }
 
-      return callback(new Error("CORS policy violation: Origin not allowed"));
+      return callback(
+        new Error("CORS policy violation: Origin not allowed")
+      );
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -79,9 +83,8 @@ app.use(
 // --------------------------------------------------
 // PayPal Webhook
 // IMPORTANT:
-// This MUST be registered before express.json()
-// because PayPal webhook verification requires
-// the original raw request body.
+// Register before express.json() because PayPal
+// verification requires the original raw request body.
 // --------------------------------------------------
 
 app.post(
@@ -118,6 +121,8 @@ app.use("/api", apiLimiter);
 
 // --------------------------------------------------
 // API Routes
+// All application routes are registered in
+// ./src/routes/index.js
 // --------------------------------------------------
 
 app.use("/api", apiRouter);
@@ -170,7 +175,9 @@ const connectDB = async () => {
 // --------------------------------------------------
 
 const shutdown = async (signal) => {
-  console.log(`Received ${signal}. Shutting down gracefully...`);
+  console.log(
+    `Received ${signal}. Shutting down gracefully...`
+  );
 
   if (server) {
     server.close(async () => {

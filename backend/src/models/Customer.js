@@ -8,6 +8,13 @@ const customerSchema = new mongoose.Schema(
       trim: true,
     },
 
+    userId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  default: null,
+  index: true,
+},
+
     phone: {
   type: String,
   default: ""

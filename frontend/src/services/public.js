@@ -75,3 +75,22 @@ export const cancelMyAppointment = async (
 
   return response.data;
 };
+
+// Customer reviews
+export const createReview = async ({
+  appointment,
+  barber,
+  rating,
+  comment = "",
+  source,
+}) => {
+  const response = await api.post("/reviews", {
+    appointment,
+    barber,
+    rating,
+    comment,
+    source,
+  });
+
+  return response.data;
+};

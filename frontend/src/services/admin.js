@@ -352,3 +352,45 @@ export const deleteRecurringBlockedTime = async (id) => {
 
   return response.data;
 };
+
+// --------------------------------------------------
+
+export const createBarberReviewQR = async (barberId) => {
+  const response = await api.post(
+    `${API_PATH.ADMIN.BARBERS}/${encodeURIComponent(barberId)}/review-qr`
+  );
+
+  return response.data;
+};
+
+export const getBarberReviewQR = async (barberId) => {
+  const response = await api.get(
+    `${API_PATH.ADMIN.BARBERS}/${encodeURIComponent(barberId)}/review-qr`
+  );
+
+  return response.data;
+};
+
+export const regenerateBarberReviewQR = async (barberId) => {
+  const response = await api.post(
+    `${API_PATH.ADMIN.BARBERS}/${encodeURIComponent(barberId)}/review-qr/regenerate`
+  );
+
+  return response.data;
+};
+
+export const updateBarberReviewQRStatus = async (
+  barberId,
+  active
+) => {
+  if (typeof active !== "boolean") {
+    throw new Error("QR active status must be a boolean.");
+  }
+
+  const response = await api.patch(
+    `${API_PATH.ADMIN.BARBERS}/${encodeURIComponent(barberId)}/review-qr/status`,
+    { active }
+  );
+
+  return response.data;
+};

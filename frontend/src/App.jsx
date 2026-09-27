@@ -10,6 +10,7 @@ import Booking from "./pages/Booking";
 import BookingSuccess from "./pages/BookingSuccess";
 import MyAppointments from "./pages/MyAppointments";
 import Login from "./pages/Login";
+import ReviewQRLandingPage from "./pages/reviews/ReviewQRLandingPage";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -26,6 +27,7 @@ import BarberDashboardPage from "./pages/barber/BarberDashboardPage";
 import BarberAppointmentsPage from "./pages/barber/BarberAppointmentsPage";
 import BarberSchedulePage from "./pages/barber/BarberSchedulePage";
 import BarberProfilePage from "./pages/barber/BarberProfilePage";
+import BarberReviewsPage from "./pages/barber/BarberReviewsPage";
 
 const App = () => {
   return (
@@ -45,6 +47,8 @@ const App = () => {
           />
           <Route path="/login" element={<Login />} />
         </Route>
+
+        <Route path="/review/qr/:token" element={<ReviewQRLandingPage />} />
 
         {/* ============================================================
             CUSTOMER
@@ -131,17 +135,19 @@ const App = () => {
               element={<BarberSchedulePage />}
 
             />
-            
- 
-  <Route
-    path="profile"
-    element={<BarberProfilePage />}
-  />
 
 
-            
+            {/* /barber/profile */}
+            <Route
+              path="profile"
+              element={<BarberProfilePage />}
+            />
 
-            
+            {/* /barber/reviews */}
+            <Route
+              path="reviews"
+              element={<BarberReviewsPage />}
+            />
           </Route>
         </Route>
       </Routes>

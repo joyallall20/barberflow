@@ -1,12 +1,11 @@
-// src/models/Barber.js
 
 import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
 /* --------------------------------------------------------------
-   Working hour sub‑schema – unchanged (keeps existing behaviour)
-   -------------------------------------------------------------- */
+   Working hour sub-schema – existing behavior preserved
+-------------------------------------------------------------- */
 const workingHourSchema = new Schema(
   {
     day: {
@@ -37,11 +36,73 @@ const workingHourSchema = new Schema(
 );
 
 /* --------------------------------------------------------------
+   Review destination URL validation
+-------------------------------------------------------------- */
+const validateReviewUrl = (value) => {
+  if (!value) return true;
+
+  try {
+    const parsed = new URL(value);
+
+    return (
+      (parsed.protocol === "https:" ||
+        parsed.protocol === "http:") &&
+      Boolean(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+};
+
+/* --------------------------------------------------------------
+   Review destination sub-schema
+-------------------------------------------------------------- */
+const reviewLinksSchema = new Schema(
+  {
+    google: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
+      default: "",
+      validate: {
+        validator: validateReviewUrl,
+        message: "Google review link must be a valid HTTP or HTTPS URL",
+      },
+    },
+
+    facebook: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
+      default: "",
+      validate: {
+        validator: validateReviewUrl,
+        message: "Facebook review link must be a valid HTTP or HTTPS URL",
+      },
+    },
+
+    website: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
+      default: "",
+      validate: {
+        validator: validateReviewUrl,
+        message: "Website review link must be a valid HTTP or HTTPS URL",
+      },
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+/* --------------------------------------------------------------
    Main Barber schema
-   -------------------------------------------------------------- */
+-------------------------------------------------------------- */
 const barberSchema = new Schema(
   {
-    /* Basic identity --------------------------------------------------- */
+    /* Basic identity */
     name: {
       type: String,
       required: true,
@@ -49,7 +110,7 @@ const barberSchema = new Schema(
       maxlength: 100,
     },
 
-    /* Email – required for linking & must be unique ------------------- */
+    /* Email – required for linking and unique */
     email: {
       type: String,
       required: true,
@@ -63,7 +124,7 @@ const barberSchema = new Schema(
       ],
     },
 
-    /* Cloudinary photo representation ----------------------------------- */
+    /* Cloudinary photo representation */
     photo: {
       url: {
         type: String,
@@ -71,6 +132,7 @@ const barberSchema = new Schema(
         maxlength: 1024,
         default: null,
       },
+
       publicId: {
         type: String,
         trim: true,
@@ -79,7 +141,7 @@ const barberSchema = new Schema(
       },
     },
 
-    /* Business profile ------------------------------------------------- */
+    /* Business profile */
     bio: {
       type: String,
       default: "",
@@ -92,25 +154,65 @@ const barberSchema = new Schema(
       default: [],
       validate: {
         validator: (arr) =>
-          arr.every((s) => typeof s === "string" && s.length <= 50),
-        message: "Each specialty must be a string of at most 50 characters",
+          arr.every(
+            (s) => typeof s === "string" && s.length <= 50
+          ),
+        message:
+          "Each specialty must be a string of at most 50 characters",
       },
     },
 
+    /* Existing working hours */
     workingHours: {
       type: [workingHourSchema],
       default: [
         { day: 0, isWorking: false },
-        { day: 1, isWorking: true, startTime: "09:00", endTime: "18:00" },
-        { day: 2, isWorking: true, startTime: "09:00", endTime: "18:00" },
-        { day: 3, isWorking: true, startTime: "09:00", endTime: "18:00" },
-        { day: 4, isWorking: true, startTime: "09:00", endTime: "18:00" },
-        { day: 5, isWorking: true, startTime: "09:00", endTime: "18:00" },
+        {
+          day: 1,
+          isWorking: true,
+          startTime: "09:00",
+          endTime: "18:00",
+        },
+        {
+          day: 2,
+          isWorking: true,
+          startTime: "09:00",
+          endTime: "18:00",
+        },
+        {
+          day: 3,
+          isWorking: true,
+          startTime: "09:00",
+          endTime: "18:00",
+        },
+        {
+          day: 4,
+          isWorking: true,
+          startTime: "09:00",
+          endTime: "18:00",
+        },
+        {
+          day: 5,
+          isWorking: true,
+          startTime: "09:00",
+          endTime: "18:00",
+        },
         { day: 6, isWorking: false },
       ],
     },
 
-    /* One‑to‑one optional link to a User (sparse + unique index) ------- */
+    /* ----------------------------------------------------------
+       External review destinations
+
+       These URLs can change without changing the barber's
+       permanent QR identity.
+    ---------------------------------------------------------- */
+    reviewLinks: {
+      type: reviewLinksSchema,
+      default: () => ({}),
+    },
+
+    /* One-to-one optional link to a User */
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
@@ -118,7 +220,7 @@ const barberSchema = new Schema(
       sparse: true,
     },
 
-    /* Active flag – controls access to barber‑only routes ------------- */
+    /* Active flag */
     active: {
       type: Boolean,
       default: true,

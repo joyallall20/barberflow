@@ -9,6 +9,13 @@ const API_PATH = {
   AVAILABILITY: "/availability",
   APPOINTMENTS: "/appointments",
 
+  // Reviews
+  REVIEWS: {
+    BASE: "/reviews",
+    QR_RESOLVE: (token) =>
+      `/reviews/qr/${encodeURIComponent(token)}`,
+  },
+
   // Payments
   PAYMENTS: {
     CREATE: "/payments",
@@ -18,7 +25,9 @@ const API_PATH = {
   // Admin
   ADMIN: {
     SERVICES: "/admin/services",
+
     BARBERS: "/admin/barbers",
+
     CUSTOMERS: "/admin/customers",
     APPOINTMENTS: "/admin/appointments",
     BLOCKED_TIMES: "/admin/blocked-times",
@@ -40,6 +49,7 @@ const API_PATH = {
     WORKING_HOURS: "/barber/working-hours",
     APPOINTMENTS: "/barber/appointments",
     DASHBOARD_OVERVIEW: "/barber/dashboard/overview",
+    REVIEW_QR: "/barber/review-qr",
   },
 };
 

@@ -105,6 +105,48 @@ const photoSchema = z
   .optional()
   .nullable();
 
+const reviewLinksSchema = z
+  .object({
+    google: z
+      .string()
+      .trim()
+      .max(2048)
+      .refine(
+        (value) =>
+          value === "" ||
+          (z.string().url().safeParse(value).success &&
+            /^https?:\/\//i.test(value)),
+        "Google review link must be a valid HTTP or HTTPS URL"
+      )
+      .optional(),
+    facebook: z
+      .string()
+      .trim()
+      .max(2048)
+      .refine(
+        (value) =>
+          value === "" ||
+          (z.string().url().safeParse(value).success &&
+            /^https?:\/\//i.test(value)),
+        "Facebook review link must be a valid HTTP or HTTPS URL"
+      )
+      .optional(),
+    website: z
+      .string()
+      .trim()
+      .max(2048)
+      .refine(
+        (value) =>
+          value === "" ||
+          (z.string().url().safeParse(value).success &&
+            /^https?:\/\//i.test(value)),
+        "Website link must be a valid HTTP or HTTPS URL"
+      )
+      .optional(),
+  })
+  .strict()
+  .optional();
+
 const createBarberSchema = z.object({
   name: z.string().trim().min(2, "Name is required").max(100),
   email: z
@@ -114,6 +156,7 @@ const createBarberSchema = z.object({
     .max(254)
     .regex(EMAIL_REGEX, "Please provide a valid email address"),
   photo: photoSchema,
+  reviewLinks: reviewLinksSchema,
   bio: z.string().trim().max(500).optional().default(""),
   specialties: z
     .array(z.string().trim().min(1).max(50))
@@ -201,6 +244,21 @@ export const updateBarber = asyncHandler(async (req, res) => {
   // Prevent modifying email or userId via updateBarber
   delete data.userId;
   delete data.email;
+
+  // Preserve existing review links when only some are updated
+  if (data.reviewLinks) {
+    const existingReviewLinks =
+      barber.reviewLinks?.toObject?.() ||
+      barber.reviewLinks ||
+      {};
+
+    barber.reviewLinks = {
+      ...existingReviewLinks,
+      ...data.reviewLinks,
+    };
+
+    delete data.reviewLinks;
+  }
 
   Object.assign(barber, data);
 

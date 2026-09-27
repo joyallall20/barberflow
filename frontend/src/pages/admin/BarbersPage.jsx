@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Plus, RefreshCw, MoreVertical, Edit2, Clock, Trash2, Power } from "lucide-react";
+import { Plus, RefreshCw, MoreVertical, Edit2, Clock, Trash2, Power, QrCode } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -14,6 +14,7 @@ import {
 
 import BarberFormModal from "../../admin/components/BarberFormModal.jsx";
 import BarberWorkingHoursModal from "../../admin/components/BarberWorkingHoursModal.jsx";
+import BarberReviewQRModal from "../../admin/components/BarberReviewQRModal.jsx";
 
 const EASE = [0.22, 1, 0.36, 1];
 
@@ -26,6 +27,7 @@ const BarbersPage = () => {
 
   const [formTarget, setFormTarget] = useState(null);
   const [hoursTarget, setHoursTarget] = useState(null);
+  const [qrTarget, setQrTarget] = useState(null);
 
   const fetchBarbers = useCallback(async () => {
     setLoading(true);
@@ -266,6 +268,15 @@ const BarbersPage = () => {
                         
                         <button
                           type="button"
+                          onClick={() => setQrTarget(barber)}
+                          className="flex h-8 w-8 items-center justify-center text-[#8f897e] transition-colors hover:text-amber-500"
+                          title="Review QR Code"
+                        >
+                          <QrCode size={14} />
+                        </button>
+                        
+                        <button
+                          type="button"
                           onClick={() => handleToggleStatus(barber)}
                           className="flex h-8 w-8 items-center justify-center text-[#8f897e] transition-colors hover:text-amber-500"
                           title={barber.active ? "Deactivate" : "Activate"}
@@ -304,6 +315,13 @@ const BarbersPage = () => {
           barber={hoursTarget}
           onClose={() => setHoursTarget(null)}
           onSubmit={handleUpdateHours}
+        />
+      )}
+
+      {qrTarget !== null && (
+        <BarberReviewQRModal
+          barber={qrTarget}
+          onClose={() => setQrTarget(null)}
         />
       )}
     </div>

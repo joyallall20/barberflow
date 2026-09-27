@@ -9,6 +9,8 @@ import {
   getMyDashboardOverview,
 } from "../controllers/barberSelf.controller.js";
 
+import { getMyReviewQR } from "../controllers/reviewQR.controller.js";
+
 import { singleImageUpload } from "../middleware/upload.js";
 import { uploadLimiter, apiLimiter } from "../middleware/rateLimiter.js";
 
@@ -20,5 +22,11 @@ barberSelfRouter.post("/photo", uploadLimiter, singleImageUpload("photo"), uploa
 barberSelfRouter.put("/working-hours", apiLimiter, updateMyWorkingHours);
 barberSelfRouter.get("/appointments", apiLimiter, getMyAppointments);
 barberSelfRouter.get("/dashboard/overview", apiLimiter, getMyDashboardOverview);
+
+barberSelfRouter.get(
+  "/review-qr",
+  apiLimiter,
+  getMyReviewQR
+);
 
 export default barberSelfRouter;

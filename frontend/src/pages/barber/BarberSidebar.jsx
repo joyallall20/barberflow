@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Calendar,
   User,
+  QrCode,
   LogOut,
   X,
 } from "lucide-react";
@@ -31,13 +32,18 @@ export const BARBER_NAV_GROUPS = [
         icon: ClipboardList,
         label: "Appointments",
         path: "/barber/appointments",
-        
+
       },
       {
         icon: Calendar,
         label: "Schedule",
         path: "/barber/schedule",
-        
+
+      },
+      {
+        icon: QrCode,
+        label: "Reviews & QR",
+        path: "/barber/reviews",
       },
     ],
   },
@@ -48,7 +54,7 @@ export const BARBER_NAV_GROUPS = [
         icon: User,
         label: "My Profile",
         path: "/barber/profile",
-        
+
       },
     ],
   },
