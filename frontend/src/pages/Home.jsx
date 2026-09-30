@@ -1,7 +1,7 @@
 import Barbers from "../components/home/Barbers";
 import Hero from "../components/home/Hero";
 import Services from "../components/home/Services";
-import Shop from "../components/home/Shop";
+import Shop from "../components/home/Shop.jsx";
 import Trust from "../components/home/Trust";
 
 const Home = () => {
