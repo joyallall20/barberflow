@@ -4,8 +4,29 @@ import mongoose from "mongoose";
 const { Schema } = mongoose;
 
 /* --------------------------------------------------------------
+   Shared HTTP/HTTPS URL validation
+-------------------------------------------------------------- */
+
+const validateUrl = (value) => {
+  if (!value) return true;
+
+  try {
+    const parsed = new URL(value);
+
+    return (
+      (parsed.protocol === "https:" ||
+        parsed.protocol === "http:") &&
+      Boolean(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+};
+
+/* --------------------------------------------------------------
    Working hour sub-schema – existing behavior preserved
 -------------------------------------------------------------- */
+
 const workingHourSchema = new Schema(
   {
     day: {
@@ -36,27 +57,9 @@ const workingHourSchema = new Schema(
 );
 
 /* --------------------------------------------------------------
-   Review destination URL validation
--------------------------------------------------------------- */
-const validateReviewUrl = (value) => {
-  if (!value) return true;
-
-  try {
-    const parsed = new URL(value);
-
-    return (
-      (parsed.protocol === "https:" ||
-        parsed.protocol === "http:") &&
-      Boolean(parsed.hostname)
-    );
-  } catch {
-    return false;
-  }
-};
-
-/* --------------------------------------------------------------
    Review destination sub-schema
 -------------------------------------------------------------- */
+
 const reviewLinksSchema = new Schema(
   {
     google: {
@@ -65,8 +68,9 @@ const reviewLinksSchema = new Schema(
       maxlength: 2048,
       default: "",
       validate: {
-        validator: validateReviewUrl,
-        message: "Google review link must be a valid HTTP or HTTPS URL",
+        validator: validateUrl,
+        message:
+          "Google review link must be a valid HTTP or HTTPS URL",
       },
     },
 
@@ -76,8 +80,9 @@ const reviewLinksSchema = new Schema(
       maxlength: 2048,
       default: "",
       validate: {
-        validator: validateReviewUrl,
-        message: "Facebook review link must be a valid HTTP or HTTPS URL",
+        validator: validateUrl,
+        message:
+          "Facebook review link must be a valid HTTP or HTTPS URL",
       },
     },
 
@@ -87,8 +92,70 @@ const reviewLinksSchema = new Schema(
       maxlength: 2048,
       default: "",
       validate: {
-        validator: validateReviewUrl,
-        message: "Website review link must be a valid HTTP or HTTPS URL",
+        validator: validateUrl,
+        message:
+          "Website review link must be a valid HTTP or HTTPS URL",
+      },
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+/* --------------------------------------------------------------
+   Barber social links sub-schema
+
+   These are public profile links, separate from reviewLinks.
+-------------------------------------------------------------- */
+
+const socialLinksSchema = new Schema(
+  {
+    instagram: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
+      default: "",
+      validate: {
+        validator: validateUrl,
+        message:
+          "Instagram link must be a valid HTTP or HTTPS URL",
+      },
+    },
+
+    tiktok: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
+      default: "",
+      validate: {
+        validator: validateUrl,
+        message:
+          "TikTok link must be a valid HTTP or HTTPS URL",
+      },
+    },
+
+    facebook: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
+      default: "",
+      validate: {
+        validator: validateUrl,
+        message:
+          "Facebook link must be a valid HTTP or HTTPS URL",
+      },
+    },
+
+    website: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
+      default: "",
+      validate: {
+        validator: validateUrl,
+        message:
+          "Website link must be a valid HTTP or HTTPS URL",
       },
     },
   },
@@ -100,9 +167,11 @@ const reviewLinksSchema = new Schema(
 /* --------------------------------------------------------------
    Main Barber schema
 -------------------------------------------------------------- */
+
 const barberSchema = new Schema(
   {
     /* Basic identity */
+
     name: {
       type: String,
       required: true,
@@ -111,6 +180,7 @@ const barberSchema = new Schema(
     },
 
     /* Email – required for linking and unique */
+
     email: {
       type: String,
       required: true,
@@ -125,6 +195,7 @@ const barberSchema = new Schema(
     },
 
     /* Cloudinary photo representation */
+
     photo: {
       url: {
         type: String,
@@ -142,6 +213,7 @@ const barberSchema = new Schema(
     },
 
     /* Business profile */
+
     bio: {
       type: String,
       default: "",
@@ -163,6 +235,7 @@ const barberSchema = new Schema(
     },
 
     /* Existing working hours */
+
     workingHours: {
       type: [workingHourSchema],
       default: [
@@ -201,18 +274,22 @@ const barberSchema = new Schema(
       ],
     },
 
-    /* ----------------------------------------------------------
-       External review destinations
+    /* External review destinations */
 
-       These URLs can change without changing the barber's
-       permanent QR identity.
-    ---------------------------------------------------------- */
     reviewLinks: {
       type: reviewLinksSchema,
       default: () => ({}),
     },
 
+    /* Public barber profile social links */
+
+    socialLinks: {
+      type: socialLinksSchema,
+      default: () => ({}),
+    },
+
     /* One-to-one optional link to a User */
+
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
@@ -221,6 +298,7 @@ const barberSchema = new Schema(
     },
 
     /* Active flag */
+
     active: {
       type: Boolean,
       default: true,

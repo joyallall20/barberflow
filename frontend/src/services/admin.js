@@ -394,3 +394,74 @@ export const updateBarberReviewQRStatus = async (
 
   return response.data;
 };
+// ============================================
+// REVIEWS
+// ============================================
+
+export const getAdminReviews = async (params) => {
+  const response = await api.get(API_PATH.ADMIN.REVIEWS, { params });
+  return response.data;
+};
+
+export const approveReview = async (id) => {
+  const response = await api.patch(`${API_PATH.ADMIN.REVIEWS}/${id}/approve`);
+  return response.data;
+};
+
+export const rejectReview = async (id) => {
+  const response = await api.patch(`${API_PATH.ADMIN.REVIEWS}/${id}/reject`);
+  return response.data;
+};
+
+export const deleteReview = async (id) => {
+  const response = await api.delete(`${API_PATH.ADMIN.REVIEWS}/${id}`);
+  return response.data;
+};
+// ============================================
+// EMAIL AUTOMATION SETTINGS
+// ============================================
+
+export const getEmailSettings = async () => {
+  const response = await api.get(
+    API_PATH.ADMIN.EMAIL_SETTINGS
+  );
+
+  return response.data;
+};
+
+export const updateEmailSettings = async (data) => {
+  const response = await api.patch(
+    API_PATH.ADMIN.EMAIL_SETTINGS,
+    data
+  );
+
+  return response.data;
+};
+// ============================================
+// EMAIL TEMPLATES
+// ============================================
+
+export const getEmailTemplates = async () => {
+  const response = await api.get(
+    API_PATH.ADMIN.EMAIL_TEMPLATES
+  );
+
+  return response.data;
+};
+
+export const getEmailTemplate = async (type) => {
+  const response = await api.get(
+    `${API_PATH.ADMIN.EMAIL_TEMPLATES}/${encodeURIComponent(type)}`
+  );
+
+  return response.data;
+};
+
+export const updateEmailTemplate = async (type, data) => {
+  const response = await api.patch(
+    `${API_PATH.ADMIN.EMAIL_TEMPLATES}/${encodeURIComponent(type)}`,
+    data
+  );
+
+  return response.data;
+};

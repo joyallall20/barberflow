@@ -9,6 +9,15 @@ const statusStyles = {
   no_show: "text-red-400/80",
 };
 
+const paymentStatusStyles = {
+  paid: "text-emerald-400",
+  pending: "text-amber-500",
+  unpaid: "text-red-400/80",
+  failed: "text-red-400/80",
+  refunded: "text-blue-400",
+  partially_refunded: "text-blue-400",
+};
+
 const AppointmentTable = ({
   appointments,
   total,
@@ -56,7 +65,7 @@ const AppointmentTable = ({
   return (
     <div className="mt-6">
       <div className="overflow-x-auto border border-white/10">
-        <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+        <table className="w-full min-w-[820px] border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-white/10 text-[9px] uppercase tracking-[0.2em] text-[#625f58]">
               <th className="px-4 py-3 font-semibold">Date</th>
@@ -65,40 +74,86 @@ const AppointmentTable = ({
               <th className="px-4 py-3 font-semibold">Service</th>
               <th className="px-4 py-3 font-semibold">Barber</th>
               <th className="px-4 py-3 font-semibold">Price</th>
+              <th className="px-4 py-3 font-semibold">Payment</th>
               <th className="px-4 py-3 font-semibold">Status</th>
             </tr>
           </thead>
+
           <tbody>
-            {appointments.map((appt, i) => (
-              <motion.tr
-                key={appt._id ?? appt.id ?? i}
-                initial={prefersReducedMotion ? false : { opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.3, delay: i * 0.02 }}
-                onClick={() => onSelect(appt)}
-                className="cursor-pointer border-b border-white/10 transition-colors hover:bg-white/[0.03]"
-              >
-                <td className="px-4 py-3 text-[#e8e2d6]">{appt.date ?? "—"}</td>
-                <td className="px-4 py-3 font-semibold text-amber-500">
-                  {appt.time ?? appt.startTime ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-[#e8e2d6]">
-                  {appt.customer?.name ?? appt.customerName ?? "Unknown"}
-                </td>
-                <td className="px-4 py-3 text-[#a89f8f]">
-                  {appt.service?.name ?? appt.serviceName ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-[#a89f8f]">
-                  {appt.barber?.name ?? appt.barberName ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-[#e8e2d6]">
-                  {appt.price != null ? `$${appt.price}` : "—"}
-                </td>
-                <td className={`px-4 py-3 font-semibold uppercase tracking-[0.1em] ${statusStyles[appt.status] ?? "text-[#8f897e]"}`}>
-                  {appt.status ?? "—"}
-                </td>
-              </motion.tr>
-            ))}
+            {appointments.map((appt, i) => {
+              const paymentStatus =
+                appt.paymentStatus ??
+                appt.payment?.status ??
+                "pending";
+
+              return (
+                <motion.tr
+                  key={appt._id ?? appt.id ?? i}
+                  initial={
+                    prefersReducedMotion ? false : { opacity: 0 }
+                  }
+                  animate={{ opacity: 1 }}
+                  transition={{
+                    duration: 0.3,
+                    delay: i * 0.02,
+                  }}
+                  onClick={() => onSelect(appt)}
+                  className="cursor-pointer border-b border-white/10 transition-colors hover:bg-white/[0.03]"
+                >
+                  <td className="px-4 py-3 text-[#e8e2d6]">
+                    {appt.date ?? "—"}
+                  </td>
+
+                  <td className="px-4 py-3 font-semibold text-amber-500">
+                    {appt.time ?? appt.startTime ?? "—"}
+                  </td>
+
+                  <td className="px-4 py-3 text-[#e8e2d6]">
+                    {appt.customer?.name ??
+                      appt.customerName ??
+                      "Unknown"}
+                  </td>
+
+                  <td className="px-4 py-3 text-[#a89f8f]">
+                    {appt.service?.name ??
+                      appt.serviceName ??
+                      "—"}
+                  </td>
+
+                  <td className="px-4 py-3 text-[#a89f8f]">
+                    {appt.barber?.name ??
+                      appt.barberName ??
+                      "—"}
+                  </td>
+
+                  <td className="px-4 py-3 text-[#e8e2d6]">
+                    {appt.price != null
+                      ? `$${appt.price}`
+                      : "—"}
+                  </td>
+
+                  {/* Payment Status */}
+                  <td
+                    className={`px-4 py-3 font-semibold uppercase tracking-[0.1em] ${
+                      paymentStatusStyles[paymentStatus] ??
+                      "text-[#8f897e]"
+                    }`}
+                  >
+                    {paymentStatus.replace(/_/g, " ")}
+                  </td>
+
+                  {/* Appointment Status */}
+                  <td
+                    className={`px-4 py-3 font-semibold uppercase tracking-[0.1em] ${
+                      statusStyles[appt.status] ??
+                      "text-[#8f897e]"
+                    }`}
+                  >
+                    {appt.status ?? "—"}
+                  </td>
+                </motion.tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -107,6 +162,7 @@ const AppointmentTable = ({
         <span>
           Page {page} of {totalPages} · {total} total
         </span>
+
         <div className="flex gap-2">
           <button
             type="button"
@@ -116,6 +172,7 @@ const AppointmentTable = ({
           >
             <ChevronLeft size={14} />
           </button>
+
           <button
             type="button"
             disabled={page >= totalPages}

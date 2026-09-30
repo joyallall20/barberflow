@@ -12,8 +12,12 @@ const API_PATH = {
   // Reviews
   REVIEWS: {
     BASE: "/reviews",
+
     QR_RESOLVE: (token) =>
       `/reviews/qr/${encodeURIComponent(token)}`,
+
+    // Get completed appointments eligible for review
+    ELIGIBLE_APPOINTMENTS: "/reviews/eligible-appointments",
   },
 
   // Payments
@@ -25,13 +29,16 @@ const API_PATH = {
   // Admin
   ADMIN: {
     SERVICES: "/admin/services",
-
     BARBERS: "/admin/barbers",
-
     CUSTOMERS: "/admin/customers",
     APPOINTMENTS: "/admin/appointments",
     BLOCKED_TIMES: "/admin/blocked-times",
     RECURRING_BLOCKED_TIMES: "/admin/recurring-blocked-times",
+    REVIEWS: "/admin/reviews",
+EMAIL_TEMPLATES: "/admin/email-templates",
+
+    // Email automation
+    EMAIL_SETTINGS: "/admin/email-settings",
 
     DASHBOARD: {
       OVERVIEW: "/admin/dashboard/overview",

@@ -15,6 +15,7 @@ import {
   Workflow,
   LogOut,
   X,
+  MessageSquare,
 } from "lucide-react";
 
 import useAuthStore from "../../store/authStore";
@@ -62,6 +63,11 @@ export const NAV_GROUPS = [
         path: "/admin/customers",
       },
       {
+        icon: MessageSquare,
+        label: "Reviews",
+        path: "/admin/reviews",
+      },
+      {
         icon: Calendar,
         label: "Blocked Times",
         path: "/admin/blocked-times",
@@ -102,10 +108,10 @@ export const NAV_GROUPS = [
         comingSoon: true,
       },
       {
-        icon: Workflow,
-        label: "Automations",
-        comingSoon: true,
-      },
+  icon: Workflow,
+  label: "Automations",
+  path: "/admin/email-settings",
+},
     ],
   },
 ];

@@ -1,3 +1,4 @@
+
 import api from "./api";
 import API_PATH from "./apiPath";
 
@@ -55,7 +56,6 @@ export const getAppointment = async (id) => {
 };
 
 // Customer appointments
-// Customer appointments
 export const getMyAppointments = async () => {
   const response = await api.get(
     `${API_PATH.APPOINTMENTS}/my`
@@ -77,6 +77,24 @@ export const cancelMyAppointment = async (
 };
 
 // Customer reviews
+
+// Get completed appointments eligible for review
+export const getEligibleReviewAppointments = async (
+  barberId
+) => {
+  const response = await api.get(
+    API_PATH.REVIEWS.ELIGIBLE_APPOINTMENTS,
+    {
+      params: {
+        barberId,
+      },
+    }
+  );
+
+  return response.data;
+};
+
+// Submit a review
 export const createReview = async ({
   appointment,
   barber,
@@ -84,13 +102,16 @@ export const createReview = async ({
   comment = "",
   source,
 }) => {
-  const response = await api.post("/reviews", {
-    appointment,
-    barber,
-    rating,
-    comment,
-    source,
-  });
+  const response = await api.post(
+    API_PATH.REVIEWS.BASE,
+    {
+      appointment,
+      barber,
+      rating,
+      comment,
+      source,
+    }
+  );
 
   return response.data;
 };

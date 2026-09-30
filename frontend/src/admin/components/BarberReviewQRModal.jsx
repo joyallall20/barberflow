@@ -8,6 +8,7 @@ import {
   createBarberReviewQR,
   regenerateBarberReviewQR,
   updateBarberReviewQRStatus,
+  updateBarber,
 } from "../../services/admin.js";
 
 const EASE = [0.22, 1, 0.36, 1];
@@ -22,6 +23,13 @@ const BarberReviewQRModal = ({ barber, onClose }) => {
   const [qrImageUrl, setQrImageUrl] = useState(null); // data-URL of the generated QR image
   const [publicUrl, setPublicUrl] = useState("");      // permanent public review URL
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
+
+  // Google & Yelp review links
+  const [reviewLinks, setReviewLinks] = useState({
+    google: "",
+    yelp: "",
+  });
+  const [savingLinks, setSavingLinks] = useState(false);
 
   const barberId = barber?._id ?? barber?.id;
 
@@ -58,6 +66,13 @@ const BarberReviewQRModal = ({ barber, onClose }) => {
 
       setQrMeta(qr);
 
+      // Load saved review links (if any)
+      const savedLinks = result.data.barber?.reviewLinks || {};
+      setReviewLinks({
+        google: savedLinks.google || "",
+        yelp: savedLinks.yelp || "",
+      });
+
       if (qr?.publicUrl) {
         setPublicUrl(qr.publicUrl);
 
@@ -72,6 +87,7 @@ const BarberReviewQRModal = ({ barber, onClose }) => {
         setQrMeta(null);
         setPublicUrl("");
         setQrImageUrl(null);
+        // Leave link fields as-is (or empty) — admin can still configure them
       } else {
         setError(err?.message || "Failed to load QR information.");
       }
@@ -212,6 +228,52 @@ const BarberReviewQRModal = ({ barber, onClose }) => {
   };
 
   // -----------------------------------------------------------
+  // Save Google and Yelp review links
+  // -----------------------------------------------------------
+  const handleSaveReviewLinks = async () => {
+    if (!barberId) return;
+
+    const links = {
+      google: reviewLinks.google.trim(),
+      yelp: reviewLinks.yelp.trim(),
+    };
+
+    // Validate URLs, allowing empty fields
+    for (const [platform, url] of Object.entries(links)) {
+      if (!url) continue;
+
+      try {
+        const parsedUrl = new URL(url);
+
+        if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+          throw new Error("Invalid protocol");
+        }
+      } catch {
+        toast.error(`Please enter a valid ${platform} URL.`);
+        return;
+      }
+    }
+
+    try {
+      setSavingLinks(true);
+      setError("");
+
+      await updateBarber(barberId, {
+        reviewLinks: {
+          google: links.google,
+          yelp: links.yelp,
+        },
+      });
+
+      toast.success("Review links saved successfully.");
+    } catch (err) {
+      setError(err?.message || "Failed to save review links.");
+    } finally {
+      setSavingLinks(false);
+    }
+  };
+
+  // -----------------------------------------------------------
   // Render
   // -----------------------------------------------------------
   return (
@@ -296,6 +358,78 @@ const BarberReviewQRModal = ({ barber, onClose }) => {
               {error}
             </div>
           )}
+
+          {/* Google & Yelp Review Links */}
+          <div className="mb-6 border border-white/10 bg-[#0f0e0d] p-5 space-y-4">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-[#e8e2d6]">
+                Review Platforms
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-[#8f897e]">
+                Add the barber's Google and Yelp review links.
+                Customers can use these links to leave a review.
+              </p>
+            </div>
+
+            {/* Google Review URL */}
+            <div>
+              <label
+                htmlFor="googleReviewUrl"
+                className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-[#a89f8f]"
+              >
+                Google Review URL
+              </label>
+
+              <input
+                id="googleReviewUrl"
+                type="url"
+                placeholder="https://g.page/r/..."
+                value={reviewLinks.google}
+                onChange={(e) =>
+                  setReviewLinks((prev) => ({
+                    ...prev,
+                    google: e.target.value,
+                  }))
+                }
+                disabled={savingLinks}
+                className="w-full border border-white/10 bg-black px-3 py-3 text-xs text-[#e8e2d6] outline-none placeholder:text-[#625f58] focus:border-amber-500 disabled:opacity-50"
+              />
+            </div>
+
+            {/* Yelp Review URL */}
+            <div>
+              <label
+                htmlFor="yelpReviewUrl"
+                className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-[#a89f8f]"
+              >
+                Yelp Review URL
+              </label>
+
+              <input
+                id="yelpReviewUrl"
+                type="url"
+                placeholder="https://www.yelp.com/biz/..."
+                value={reviewLinks.yelp}
+                onChange={(e) =>
+                  setReviewLinks((prev) => ({
+                    ...prev,
+                    yelp: e.target.value,
+                  }))
+                }
+                disabled={savingLinks}
+                className="w-full border border-white/10 bg-black px-3 py-3 text-xs text-[#e8e2d6] outline-none placeholder:text-[#625f58] focus:border-amber-500 disabled:opacity-50"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSaveReviewLinks}
+              disabled={savingLinks || loading}
+              className="w-full border border-amber-500 bg-amber-500 px-5 py-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black transition-colors hover:bg-transparent hover:text-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {savingLinks ? "Saving Links..." : "Save Review Links"}
+            </button>
+          </div>
 
           {/* Loading */}
           {loading ? (

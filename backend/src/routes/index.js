@@ -1,11 +1,10 @@
-
 // routes/index.js
 import { Router } from "express";
 
 import protect from "../middleware/auth.js";
 import requireAdmin from "../middleware/admin.js";
 import requireBarber from "../middleware/barberAuth.js";
-
+import adminEmailTemplatesRouter from "./adminEmailTemplates.routes.js";
 // Rate Limiters
 import {
   authLimiter,
@@ -41,9 +40,13 @@ import blockedTimeRouter from "./blockedTime.routes.js";
 import recurringBlockedTimeRouter from "./recurringBlockedTime.routes.js";
 import availabilityRouter from "./availability.routes.js";
 import barberSelfRouter from "./barberSelf.routes.js";
+import adminEmailSettingsRouter from "./adminEmailSettings.routes.js";
 
 // Self-service auth endpoints
-import { syncMe, getMe } from "../controllers/customer.controller.js";
+import {
+  syncMe,
+  getMe,
+} from "../controllers/customer.controller.js";
 
 const router = Router();
 
@@ -81,6 +84,11 @@ router.get(
   authLimiter,
   protect,
   getMe
+);
+router.use(
+  "/admin/email-templates",
+  adminGuard,
+  adminEmailTemplatesRouter
 );
 
 /* ------------------------------------------------------------------ */
@@ -172,6 +180,16 @@ router.use(
 );
 
 /* ------------------------------------------------------------------ */
+/* Email Automation Settings                                         */
+/* ------------------------------------------------------------------ */
+
+router.use(
+  "/admin/email-settings",
+  adminGuard,
+  adminEmailSettingsRouter
+);
+
+/* ------------------------------------------------------------------ */
 /* Payment & Refund Admin Routes                                      */
 /* ------------------------------------------------------------------ */
 
@@ -199,4 +217,3 @@ router.use((req, res) => {
 });
 
 export default router;
-

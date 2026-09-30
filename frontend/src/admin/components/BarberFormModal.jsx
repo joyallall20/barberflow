@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { X, Upload } from "lucide-react";
+import { X, Upload, Globe2 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadBarberPhoto } from "../../services/admin.js";
 
@@ -8,7 +8,34 @@ const EMPTY_FORM = {
   email: "",
   bio: "",
   specialties: "",
+  instagram: "",
+  tiktok: "",
+  facebook: "",
+  website: "",
 };
+
+const SOCIAL_FIELDS = [
+  {
+    name: "instagram",
+    label: "Instagram",
+    placeholder: "https://instagram.com/yourprofile",
+  },
+  {
+    name: "tiktok",
+    label: "TikTok",
+    placeholder: "https://www.tiktok.com/@yourprofile",
+  },
+  {
+    name: "facebook",
+    label: "Facebook",
+    placeholder: "https://facebook.com/yourprofile",
+  },
+  {
+    name: "website",
+    label: "Website",
+    placeholder: "https://yourwebsite.com",
+  },
+];
 
 const BarberFormModal = ({ barber, onClose, onSubmit }) => {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -21,23 +48,34 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
   const isEditing = Boolean(barber);
 
   useEffect(() => {
+    setError("");
+    setPhotoFile(null);
+
     if (!barber) {
       setForm(EMPTY_FORM);
       setPhotoPreview(null);
       return;
     }
 
+    const socialLinks = barber.socialLinks || {};
+
     setForm({
       name: barber.name ?? "",
       email: barber.email ?? "",
       bio: barber.bio ?? "",
       specialties: barber.specialties ? barber.specialties.join(", ") : "",
+      instagram: socialLinks.instagram ?? "",
+      tiktok: socialLinks.tiktok ?? "",
+      facebook: socialLinks.facebook ?? "",
+      website: socialLinks.website ?? "",
     });
+
     setPhotoPreview(barber.photo?.url ?? null);
   }, [barber]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
+
     setForm((current) => ({
       ...current,
       [name]: value,
@@ -45,15 +83,55 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
   };
 
   const handlePhotoChange = (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
+
     if (file) {
       setPhotoFile(file);
+
       const reader = new FileReader();
+
       reader.onloadend = () => {
         setPhotoPreview(reader.result);
       };
+
       reader.readAsDataURL(file);
     }
+  };
+
+  const validateSocialLinks = () => {
+    const links = {};
+
+    for (const field of SOCIAL_FIELDS) {
+      const value = form[field.name].trim();
+
+      if (!value) {
+        links[field.name] = "";
+        continue;
+      }
+
+      try {
+        const parsed = new URL(value);
+
+        if (
+          !["http:", "https:"].includes(parsed.protocol) ||
+          !parsed.hostname
+        ) {
+          throw new Error("Invalid URL");
+        }
+      } catch {
+        setError(`Please enter a valid ${field.label} URL.`);
+        return null;
+      }
+
+      if (value.length > 2048) {
+        setError(`${field.label} URL cannot exceed 2048 characters.`);
+        return null;
+      }
+
+      links[field.name] = value;
+    }
+
+    return links;
   };
 
   const handleSubmit = async (event) => {
@@ -63,6 +141,7 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
     const name = form.name.trim();
     const email = form.email.trim();
     const bio = form.bio.trim();
+
     const specialtiesArray = form.specialties
       .split(",")
       .map((s) => s.trim())
@@ -78,10 +157,15 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
       return;
     }
 
+    const socialLinks = validateSocialLinks();
+
+    if (!socialLinks) return;
+
     const payload = {
       name,
       bio,
       specialties: specialtiesArray,
+      socialLinks,
     };
 
     if (!isEditing) {
@@ -90,13 +174,21 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
 
     try {
       setSubmitting(true);
+
       const savedBarber = await onSubmit(payload, barber?._id ?? barber?.id);
-      
-      const barberId = savedBarber?.data?._id || savedBarber?.data?.id || barber?._id || barber?.id;
+
+      const barberId =
+        savedBarber?.data?._id ||
+        savedBarber?.data?.id ||
+        savedBarber?._id ||
+        savedBarber?.id ||
+        barber?._id ||
+        barber?.id;
 
       if (photoFile && barberId) {
         const formData = new FormData();
         formData.append("photo", photoFile);
+
         try {
           await uploadBarberPhoto(barberId, formData);
         } catch (photoErr) {
@@ -104,14 +196,15 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
           console.error(photoErr);
         }
       }
-      
+
       onClose();
     } catch (err) {
       setError(
         err?.response?.data?.message ||
           err?.message ||
-          "Unable to save barber."
+          "Unable to save barber.",
       );
+
       setSubmitting(false);
     }
   };
@@ -126,6 +219,7 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
       />
 
       <div className="relative z-10 w-full max-w-xl border border-white/10 bg-[#141311] shadow-2xl max-h-[90vh] overflow-y-auto">
+        {/* Header */}
         <div className="flex items-start justify-between border-b border-white/10 px-6 py-5 sticky top-0 bg-[#141311] z-10">
           <div>
             <div className="text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-500">
@@ -155,31 +249,42 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
             </div>
           )}
 
+          {/* Photo upload */}
           <div className="flex flex-col items-center mb-6">
-            <div 
+            <div
               className="w-24 h-24 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center bg-[#0f0e0d] overflow-hidden mb-3 cursor-pointer relative group"
               onClick={() => fileInputRef.current?.click()}
             >
               {photoPreview ? (
                 <>
-                  <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                  <img
+                    src={photoPreview}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <Upload size={20} className="text-white" />
                   </div>
                 </>
               ) : (
-                <Upload size={24} className="text-[#625f58] group-hover:text-amber-500 transition-colors" />
+                <Upload
+                  size={24}
+                  className="text-[#625f58] group-hover:text-amber-500 transition-colors"
+                />
               )}
             </div>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handlePhotoChange} 
-              accept="image/*" 
-              className="hidden" 
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handlePhotoChange}
+              accept="image/*"
+              className="hidden"
             />
-            <button 
-              type="button" 
+
+            <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
               className="text-[10px] uppercase tracking-[0.1em] text-amber-500 hover:text-amber-400"
             >
@@ -187,10 +292,12 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
             </button>
           </div>
 
+          {/* Name */}
           <div>
             <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.25em] text-[#8f897e]">
               Name
             </label>
+
             <input
               name="name"
               value={form.name}
@@ -202,10 +309,12 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
             />
           </div>
 
+          {/* Email */}
           <div>
             <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.25em] text-[#8f897e]">
               Email {isEditing && "(Read-only)"}
             </label>
+
             <input
               name="email"
               type="email"
@@ -219,10 +328,12 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
             />
           </div>
 
+          {/* Bio */}
           <div>
             <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.25em] text-[#8f897e]">
               Bio
             </label>
+
             <textarea
               name="bio"
               value={form.bio}
@@ -234,10 +345,12 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
             />
           </div>
 
+          {/* Specialties */}
           <div>
             <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.25em] text-[#8f897e]">
               Specialties (Comma Separated)
             </label>
+
             <input
               name="specialties"
               value={form.specialties}
@@ -247,6 +360,47 @@ const BarberFormModal = ({ barber, onClose, onSubmit }) => {
             />
           </div>
 
+          {/* Social links */}
+          <div className="border-t border-white/10 pt-5 space-y-4">
+            <div>
+              <div className="flex items-center gap-2">
+               <Globe2 size={15} className="text-amber-500" />
+
+                <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-[#e8e2d6]">
+                  Social & Website Links
+                </h3>
+              </div>
+
+              <p className="mt-2 text-xs leading-relaxed text-[#8f897e]">
+                Optional links displayed on the barber's public profile.
+              </p>
+            </div>
+
+            {SOCIAL_FIELDS.map((field) => (
+              <div key={field.name}>
+                <label
+                  htmlFor={`social-${field.name}`}
+                  className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.25em] text-[#8f897e]"
+                >
+                  {field.label}
+                </label>
+
+                <input
+                  id={`social-${field.name}`}
+                  name={field.name}
+                  type="url"
+                  value={form[field.name]}
+                  onChange={handleChange}
+                  maxLength={2048}
+                  placeholder={field.placeholder}
+                  disabled={submitting}
+                  className="w-full border border-white/10 bg-[#0f0e0d] px-4 py-3 text-sm text-[#e8e2d6] outline-none transition-colors placeholder:text-[#625f58] focus:border-amber-500 disabled:opacity-50"
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Actions */}
           <div className="flex justify-end gap-2 border-t border-white/10 pt-5">
             <button
               type="button"

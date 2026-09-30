@@ -147,6 +147,63 @@ const reviewLinksSchema = z
   .strict()
   .optional();
 
+const socialLinksSchema = z
+  .object({
+    instagram: z
+      .string()
+      .trim()
+      .max(2048)
+      .refine(
+        (value) =>
+          value === "" ||
+          (z.string().url().safeParse(value).success &&
+            /^https?:\/\//i.test(value)),
+        "Instagram link must be a valid HTTP or HTTPS URL"
+      )
+      .optional(),
+
+    tiktok: z
+      .string()
+      .trim()
+      .max(2048)
+      .refine(
+        (value) =>
+          value === "" ||
+          (z.string().url().safeParse(value).success &&
+            /^https?:\/\//i.test(value)),
+        "TikTok link must be a valid HTTP or HTTPS URL"
+      )
+      .optional(),
+
+    facebook: z
+      .string()
+      .trim()
+      .max(2048)
+      .refine(
+        (value) =>
+          value === "" ||
+          (z.string().url().safeParse(value).success &&
+            /^https?:\/\//i.test(value)),
+        "Facebook link must be a valid HTTP or HTTPS URL"
+      )
+      .optional(),
+
+    website: z
+      .string()
+      .trim()
+      .max(2048)
+      .refine(
+        (value) =>
+          value === "" ||
+          (z.string().url().safeParse(value).success &&
+            /^https?:\/\//i.test(value)),
+        "Website link must be a valid HTTP or HTTPS URL"
+      )
+      .optional(),
+  })
+  .strict()
+  .optional();
+
 const createBarberSchema = z.object({
   name: z.string().trim().min(2, "Name is required").max(100),
   email: z
@@ -155,8 +212,11 @@ const createBarberSchema = z.object({
     .min(5)
     .max(254)
     .regex(EMAIL_REGEX, "Please provide a valid email address"),
+
   photo: photoSchema,
   reviewLinks: reviewLinksSchema,
+  socialLinks: socialLinksSchema,
+
   bio: z.string().trim().max(500).optional().default(""),
   specialties: z
     .array(z.string().trim().min(1).max(50))
@@ -258,6 +318,21 @@ export const updateBarber = asyncHandler(async (req, res) => {
     };
 
     delete data.reviewLinks;
+  }
+
+  // Preserve existing social links when only some are updated
+  if (data.socialLinks) {
+    const existingSocialLinks =
+      barber.socialLinks?.toObject?.() ||
+      barber.socialLinks ||
+      {};
+
+    barber.socialLinks = {
+      ...existingSocialLinks,
+      ...data.socialLinks,
+    };
+
+    delete data.socialLinks;
   }
 
   Object.assign(barber, data);

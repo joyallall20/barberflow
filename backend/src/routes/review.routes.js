@@ -1,7 +1,9 @@
+
 import { Router } from "express";
 
 import {
   createReview,
+  getEligibleReviewAppointments,
   getBarberPublicReviews,
   getBarberReviewSummary,
   listAdminReviews,
@@ -19,6 +21,8 @@ import {
   adminLimiter,
 } from "../middleware/rateLimiter.js";
 
+import protect from "../middleware/auth.js";
+
 export const publicReviewRouter = Router();
 export const adminReviewRouter = Router();
 
@@ -34,10 +38,20 @@ publicReviewRouter.get(
   resolveReviewQR
 );
 
+// Get completed appointments eligible for review
+// Requires customer authentication
+publicReviewRouter.get(
+  "/eligible-appointments",
+  publicLimiter,
+  protect,
+  getEligibleReviewAppointments
+);
+
 // Submit a review
 publicReviewRouter.post(
   "/",
   publicLimiter,
+  protect,
   createReview
 );
 

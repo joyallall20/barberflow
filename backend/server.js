@@ -1,4 +1,3 @@
-
 /* ALWAYS put dotenv/config at line 1 in ES Modules */
 import "dotenv/config";
 
@@ -14,6 +13,9 @@ import {
 } from "./src/middleware/error.js";
 import { apiLimiter } from "./src/middleware/rateLimiter.js";
 import { handlePaypalWebhook } from "./src/controllers/webhook.controller.js";
+import { seedEmailTemplates } from "./src/seed/emailTemplates.seed.js";
+// Start BullMQ email worker
+import "./src/workers/email.worker.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -156,6 +158,8 @@ const connectDB = async () => {
     await mongoose.connect(process.env.MONGODB_URI);
 
     console.log("MongoDB connected successfully");
+
+    await seedEmailTemplates();
 
     server = app.listen(PORT, () => {
       console.log(`The Foundry API running on port ${PORT}`);

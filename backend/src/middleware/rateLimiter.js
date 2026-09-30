@@ -16,10 +16,11 @@ const makeLimiter = ({ windowMs, max, message }) =>
 // Auth / Sync endpoint rate limiter (protects login & sync brute force)
 export const authLimiter = makeLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15,
+
+  max: process.env.NODE_ENV === "production" ? 15 : 1000,
+
   message: "Too many authentication attempts from this IP. Please try again later.",
 });
-
 // Public read endpoints rate limiter
 export const publicLimiter = makeLimiter({
   windowMs: 15 * 60 * 1000,

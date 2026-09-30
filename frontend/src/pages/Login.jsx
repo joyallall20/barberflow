@@ -103,13 +103,26 @@ const Login = () => {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const getNavDestAndState = (targetRole) => {
+    let from;
+    if (location.state?.returnToBooking) {
+      from = location.state?.from || "/book";
+    } else if (location.state?.from) {
+      from = typeof location.state.from === 'string' 
+        ? location.state.from 
+        : location.state.from.pathname;
+    }
+    
+    return {
+      dest: resolvePostLoginPath(from, targetRole),
+      state: { ...location.state }
+    };
+  };
+
   // Already signed in → role-based redirect (respects deep-link target).
   if (!loading && !bootstrapping && user && role) {
-    const from = location.state?.returnToBooking 
-      ? (location.state?.from || "/book") 
-      : location.state?.from?.pathname;
-      
-    return <Navigate to={resolvePostLoginPath(from, role)} replace />;
+    const { dest, state } = getNavDestAndState(role);
+    return <Navigate to={dest} replace state={state} />;
   }
 
   /* ---------- submit: sign in ---------- */
@@ -124,11 +137,9 @@ const Login = () => {
 
       // login() hydrates mongoUser; read fresh role from the store.
       const nextRole = useAuthStore.getState().role;
-      const from = location.state?.returnToBooking 
-        ? (location.state?.from || "/book") 
-        : location.state?.from?.pathname;
+      const { dest, state } = getNavDestAndState(nextRole);
 
-      navigate(resolvePostLoginPath(from, nextRole), { replace: true });
+      navigate(dest, { replace: true, state });
     } catch (err) {
       setError(mapAuthError(err));
     } finally {
@@ -146,11 +157,9 @@ const Login = () => {
       await loginWithGoogle();
 
       const nextRole = useAuthStore.getState().role;
-      const from = location.state?.returnToBooking 
-        ? (location.state?.from || "/book") 
-        : location.state?.from?.pathname;
+      const { dest, state } = getNavDestAndState(nextRole);
 
-      navigate(resolvePostLoginPath(from, nextRole), { replace: true });
+      navigate(dest, { replace: true, state });
     } catch (err) {
       setError(mapAuthError(err));
     } finally {

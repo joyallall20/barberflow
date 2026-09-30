@@ -22,6 +22,13 @@ import { parseDateOnly } from "../utils/time.js";
 import { validateBookingSlot } from "../services/availability.service.js";
 import { findOrCreateCustomer } from "../services/customer.service.js";
 
+import {
+  scheduleAppointmentEmails,
+  scheduleCompletionEmails,
+  rescheduleAppointmentEmails,
+  cancelAppointmentEmailJobs,
+} from "../services/email.scheduler.js";
+
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
 /* ------------------------------------------------------------------ */
@@ -256,6 +263,18 @@ export const createAppointment = asyncHandler(async (req, res) => {
 
     await appointment.populate(POPULATE_PATHS);
 
+    // Schedule automated appointment emails only after
+    // the appointment transaction has successfully committed.
+    try {
+      await scheduleAppointmentEmails(appointment);
+    } catch (emailError) {
+      // Email scheduling must never make a successful booking fail.
+      console.error(
+        "Failed to schedule appointment emails:",
+        emailError
+      );
+    }
+
     return sendCreated(
       res,
       appointment,
@@ -483,6 +502,18 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
 
     await appointment.populate(POPULATE_PATHS);
 
+    // Cancel any pending automated emails for this appointment.
+    // Email cancellation must not prevent the cancellation itself
+    // from succeeding.
+    try {
+      await cancelAppointmentEmailJobs(appointment._id);
+    } catch (emailError) {
+      console.error(
+        "Failed to cancel appointment email jobs:",
+        emailError
+      );
+    }
+
     return sendSuccess(
       res,
       {
@@ -538,7 +569,22 @@ export const completeAppointment = asyncHandler(async (req, res) => {
   await appointment.save();
   await appointment.populate(POPULATE_PATHS);
 
-  return sendSuccess(res, appointment, "Appointment completed successfully");
+  // Schedule post-appointment automation after completion.
+  // This includes thank-you, review request and win-back.
+  try {
+    await scheduleCompletionEmails(appointment);
+  } catch (emailError) {
+    console.error(
+      "Failed to schedule completion emails:",
+      emailError
+    );
+  }
+
+  return sendSuccess(
+    res,
+    appointment,
+    "Appointment completed successfully"
+  );
 });
 
 export const markNoShow = asyncHandler(async (req, res) => {
@@ -556,7 +602,20 @@ export const markNoShow = asyncHandler(async (req, res) => {
   await appointment.save();
   await appointment.populate(POPULATE_PATHS);
 
-  return sendSuccess(res, appointment, "Appointment marked as no-show");
+  try {
+    await cancelAppointmentEmailJobs(appointment._id);
+  } catch (emailError) {
+    console.error(
+      "Failed to cancel no-show appointment email jobs:",
+      emailError
+    );
+  }
+
+  return sendSuccess(
+    res,
+    appointment,
+    "Appointment marked as no-show"
+  );
 });
 
 export const rescheduleAppointment = asyncHandler(async (req, res) => {
@@ -614,6 +673,17 @@ export const rescheduleAppointment = asyncHandler(async (req, res) => {
     });
 
     await updatedAppointment.populate(POPULATE_PATHS);
+
+    // The appointment time changed, so the old reminder must be
+    // removed and a new reminder calculated from the new time.
+    try {
+      await rescheduleAppointmentEmails(updatedAppointment);
+    } catch (emailError) {
+      console.error(
+        "Failed to reschedule appointment emails:",
+        emailError
+      );
+    }
 
     return sendSuccess(
       res,
@@ -727,6 +797,16 @@ export const cancelMyCustomerAppointment = asyncHandler(async (req, res) => {
   // paymentStatus intentionally left as-is — admin handles refunds.
   await appointment.save();
   await appointment.populate(POPULATE_PATHS);
+
+  // Remove pending automated emails for the cancelled appointment.
+  try {
+    await cancelAppointmentEmailJobs(appointment._id);
+  } catch (emailError) {
+    console.error(
+      "Failed to cancel appointment email jobs:",
+      emailError
+    );
+  }
 
   return sendSuccess(res, appointment, "Appointment cancelled successfully");
 });

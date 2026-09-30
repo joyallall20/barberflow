@@ -84,3 +84,19 @@ export const getMyReviewQR = async () => {
 
   return response.data;
 };
+
+/**
+ * Fetches the barber's approved public reviews.
+ *
+ * Endpoint: GET /api/barbers/:barberId/reviews
+ * Public endpoint — returns only approved reviews with customer name populated.
+ *
+ * Response shape: { reviews: [...], total, page, limit }
+ */
+export const getMyBarberReviews = async (barberId) => {
+  const response = await api.get(
+    `${API_PATH.BARBERS}/${barberId}/reviews`
+  );
+
+  return response.data;
+};

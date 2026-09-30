@@ -399,3 +399,58 @@ export const deleteReview = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, { id: reviewId }, "Review deleted successfully");
 });
+
+/**
+ * GET /api/reviews/eligible-appointments?barberId=...
+ *
+ * Authenticated customer: return their completed appointments
+ * with this barber that do not already have a review.
+ */
+export const getEligibleReviewAppointments = asyncHandler(
+  async (req, res) => {
+    const { barberId } = req.query;
+
+    if (!barberId || typeof barberId !== "string") {
+      throw new ApiError(400, "Barber ID is required");
+    }
+
+    ensureObjectId(barberId, "barber ID");
+
+    const customer = await requireCustomerProfile(req);
+
+    const barberExists = await Barber.exists({
+      _id: barberId,
+      active: true,
+    });
+
+    if (!barberExists) {
+      throw new ApiError(404, "Barber not found or inactive");
+    }
+
+    // Find all appointment IDs that already have a review.
+    const reviewedAppointmentIds = await Review.distinct(
+      "appointment",
+      { customer: customer._id }
+    );
+
+    const appointments = await Appointment.find({
+      customer: customer._id,
+      barber: barberId,
+      status: "completed",
+      _id: { $nin: reviewedAppointmentIds },
+    })
+      .select(
+        "date startTime endTime status paymentStatus service barber"
+      )
+      .sort({ date: -1, startTime: -1 })
+      .populate("service", "name price duration")
+      .populate("barber", "name photo")
+      .lean();
+
+    return sendSuccess(
+      res,
+      { appointments },
+      "Eligible review appointments retrieved successfully"
+    );
+  }
+);

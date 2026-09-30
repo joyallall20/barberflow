@@ -12,34 +12,10 @@ import {
 import { toast } from "sonner";
 import QRCode from "qrcode";
 
-import { getMyReviewQR } from "../../services/barberService";
+import useAuthStore from "../../store/authStore";
+import { getMyReviewQR, getMyBarberReviews } from "../../services/barberService";
 
 const EASE = [0.22, 1, 0.36, 1];
-
-/* ------------------------------------------------------------------ */
-/* Backend contract status                                             */
-/* ------------------------------------------------------------------ */
-/*
- * VERIFIED
- *   GET /api/barber/review-qr (API_PATH.BARBER.REVIEW_QR)
- *     - Authenticated barber self-service; no barber ID is sent.
- *     - Response fields verified against the ReviewQR model:
- *         publicId  (String, permanent public identifier)
- *         active    (Boolean, defaults to true)
- *         createdAt (Date)
- *     - The backend stores no QR image; the QR is rendered from the
- *       publicId using the existing `qrcode` dependency, pointing at
- *       the existing public landing route /review/qr/:token.
- *
- * MISSING (integration boundary — not invented per spec)
- *   There is no authenticated barber review-list endpoint in
- *   API_PATH, and none was provided. API_PATH.REVIEWS.BASE is the
- *   PUBLIC reviews route and must not be assumed to support employee
- *   access. Until a verified barber-scoped endpoint exists (list of
- *   approved reviews + statistics), the Customer Reviews section
- *   renders a pending-contract state instead of fabricated data.
- */
-const REVIEW_LIST_CONTRACT_AVAILABLE = false;
 
 /* ------------------------------------------------------------------ */
 /* Reusable star rating display                                        */
@@ -114,6 +90,7 @@ const normalizeQRResponse = (res) => {
 const BarberReviewsPage = () => {
   const prefersReducedMotion = useReducedMotion();
   const qrSectionRef = useRef(null);
+  const mongoUser = useAuthStore((s) => s.mongoUser);
 
   const [qrInfo, setQrInfo] = useState(null);
   const [qrMissing, setQrMissing] = useState(false);
@@ -122,6 +99,12 @@ const BarberReviewsPage = () => {
 
   const [qrImage, setQrImage] = useState(null);
   const [qrImageError, setQrImageError] = useState(false);
+
+  /* ---- Customer reviews state ---- */
+  const [reviews, setReviews] = useState([]);
+  const [reviewsTotal, setReviewsTotal] = useState(0);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewsError, setReviewsError] = useState(null);
 
   /* ---------- Fetch QR info ---------- */
   const fetchQR = useCallback(async () => {
@@ -158,9 +141,37 @@ const BarberReviewsPage = () => {
     }
   }, []);
 
+  /* ---------- Fetch approved reviews ---------- */
+  const fetchReviews = useCallback(async () => {
+    const barberId = mongoUser?.barberId;
+    if (!barberId) return;
+
+    setReviewsLoading(true);
+    setReviewsError(null);
+
+    try {
+      const res = await getMyBarberReviews(barberId);
+      const payload = res?.data ?? res;
+      setReviews(payload?.reviews ?? []);
+      setReviewsTotal(payload?.total ?? 0);
+    } catch (err) {
+      setReviews([]);
+      setReviewsError(
+        err?.response?.data?.message ||
+          "Unable to load your customer reviews."
+      );
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [mongoUser?.barberId]);
+
   useEffect(() => {
     fetchQR();
   }, [fetchQR]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
 
   /* ---------- Derived public review URL ---------- */
   const reviewUrl = qrInfo
@@ -417,6 +428,126 @@ const BarberReviewsPage = () => {
   );
 
   /* ------------------------------------------------------------------ */
+  /* Customer reviews section                                           */
+  /* ------------------------------------------------------------------ */
+  const renderReviewsSection = () => {
+    if (reviewsLoading) {
+      return (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-24 animate-pulse border border-white/10 bg-[#141311]"
+            />
+          ))}
+        </div>
+      );
+    }
+
+    if (reviewsError) {
+      return (
+        <div className="flex flex-col items-center border border-white/10 px-6 py-14 text-center">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-500">
+            Something went wrong
+          </div>
+          <p className="mt-3 max-w-sm text-sm leading-relaxed text-[#8f897e]">
+            {reviewsError}
+          </p>
+          <button
+            type="button"
+            onClick={fetchReviews}
+            className="mt-6 flex items-center gap-2 border border-white/10 px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#8f897e] transition-colors hover:border-amber-500 hover:text-amber-500"
+          >
+            <RefreshCw size={13} />
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    if (!reviews.length) {
+      return (
+        <motion.div
+          initial={prefersReducedMotion ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="border border-white/10 px-6 py-14 text-center"
+        >
+          <MessageSquare size={20} className="mx-auto text-[#625f58]" />
+          <div className="mt-4 text-sm font-bold uppercase tracking-[0.15em] text-[#e8e2d6]">
+            No reviews yet
+          </div>
+          <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-[#8f897e]">
+            Your customer reviews will appear here once they are approved.
+            Share your review QR code with customers after their appointment
+            to invite feedback.
+          </p>
+          {!qrLoading && !qrError && !qrMissing && (
+            <button
+              type="button"
+              onClick={scrollToQR}
+              className="mt-6 inline-flex items-center gap-2 border border-white/10 px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#8f897e] transition-colors hover:border-amber-500 hover:text-amber-500"
+            >
+              <QrCode size={13} />
+              View Your QR Code
+            </button>
+          )}
+        </motion.div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {reviews.map((review) => {
+          const customerName =
+            review.customer?.name || "Anonymous";
+          const date = review.createdAt
+            ? new Date(review.createdAt).toLocaleDateString()
+            : null;
+
+          return (
+            <motion.div
+              key={review._id}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: EASE }}
+              className="border border-white/10 bg-white/[0.02] p-5"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-[#e8e2d6]">
+                      {customerName}
+                    </span>
+                    {date && (
+                      <span className="text-[10px] text-[#625f58]">
+                        {date}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1">
+                    <StarRating value={review.rating} />
+                  </div>
+                  {review.comment && (
+                    <p className="mt-3 text-sm leading-relaxed text-[#aaa398]">
+                      {review.comment}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+        {reviewsTotal > reviews.length && (
+          <div className="pt-2 text-center text-[10px] text-[#625f58]">
+            Showing {reviews.length} of {reviewsTotal} reviews
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /* ------------------------------------------------------------------ */
   /* Render                                                              */
   /* ------------------------------------------------------------------ */
   return (
@@ -454,36 +585,12 @@ const BarberReviewsPage = () => {
         <div className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-[#625f58]">
           <MessageSquare size={13} className="text-amber-500" />
           Customer Reviews
+          {reviewsTotal > 0 && (
+            <span className="ml-1 text-amber-500">({reviewsTotal})</span>
+          )}
         </div>
 
-        {REVIEW_LIST_CONTRACT_AVAILABLE ? null : (
-          <motion.div
-            initial={prefersReducedMotion ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            className="border border-white/10 px-6 py-14 text-center"
-          >
-            <MessageSquare size={20} className="mx-auto text-[#625f58]" />
-            <div className="mt-4 text-sm font-bold uppercase tracking-[0.15em] text-[#e8e2d6]">
-              No reviews yet
-            </div>
-            <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-[#8f897e]">
-              Your customer reviews will appear here once they are approved.
-              Share your review QR code with customers after their appointment
-              to invite feedback.
-            </p>
-            {!qrLoading && !qrError && !qrMissing && (
-              <button
-                type="button"
-                onClick={scrollToQR}
-                className="mt-6 inline-flex items-center gap-2 border border-white/10 px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#8f897e] transition-colors hover:border-amber-500 hover:text-amber-500"
-              >
-                <QrCode size={13} />
-                View Your QR Code
-              </button>
-            )}
-          </motion.div>
-        )}
+        {renderReviewsSection()}
       </div>
     </div>
   );

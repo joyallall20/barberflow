@@ -240,14 +240,19 @@ export const getReviewQR = async (req, res) => {
         },
       },
     });
-  } catch (error) {
-    console.error("Get review QR error:", error);
+ } catch (error) {
+  console.error("Get review QR error:", {
+    message: error.message,
+    name: error.name,
+    code: error.code,
+    stack: error.stack,
+  });
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to retrieve review QR",
-    });
-  }
+  return res.status(500).json({
+    success: false,
+    message: "Failed to retrieve review QR",
+  });
+}
 };
 
 /**

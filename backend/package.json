@@ -15,6 +15,7 @@
   "dependencies": {
     "@paypal/paypal-server-sdk": "^2.5.0",
     "@sendinblue/client": "^3.3.1",
+    "bullmq": "^6.3.10",
     "cloudinary": "^2.11.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -22,6 +23,7 @@
     "express-rate-limit": "^8.7.0",
     "firebase-admin": "^14.4.0",
     "helmet": "^8.3.0",
+    "ioredis": "^6.0.0",
     "luxon": "^3.7.2",
     "mongoose": "^9.10.1",
     "multer": "^2.4.0",

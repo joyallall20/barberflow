@@ -20,6 +20,9 @@ import ServicesPage from "./pages/admin/ServicesPage";
 import BarbersPage from "./pages/admin/BarbersPage";
 import CustomersPage from "./pages/admin/CustomersPage";
 import BlockedTimesPage from "./pages/admin/BlockedTimesPage";
+import AdminReviewsPage from "./pages/admin/AdminReviewsPage";
+import EmailSettingsPage from "./pages/admin/EmailSettingsPage";
+import EmailTemplatesPage from "./pages/admin/EmailTemplatesPage";
 
 // Barber pages
 import BarberLayout from "./pages/barber/BarberLayout";
@@ -100,8 +103,23 @@ const App = () => {
             />
 
             <Route
+              path="reviews"
+              element={<AdminReviewsPage />}
+            />
+
+            <Route
               path="blocked-times"
               element={<BlockedTimesPage />}
+            />
+
+            <Route
+              path="email-settings"
+              element={<EmailSettingsPage />}
+            />
+
+            <Route
+              path="email-templates"
+              element={<EmailTemplatesPage />}
             />
           </Route>
         </Route>
@@ -133,9 +151,7 @@ const App = () => {
             <Route
               path="schedule"
               element={<BarberSchedulePage />}
-
             />
-
 
             {/* /barber/profile */}
             <Route
