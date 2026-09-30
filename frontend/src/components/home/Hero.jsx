@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Scissors } from "lucide-react";
+import { Scissors, Clock, MapPin } from "lucide-react";
 
 const Hero = () => {
   const container = {
@@ -37,6 +37,13 @@ const Hero = () => {
     },
   };
 
+  // Placeholder stats: replace with real figures before shipping
+  const stats = [
+    { value: "13+", label: "Years" },
+    { value: "4.9★", label: "Rated" },
+    { value: "15K+", label: "Cuts" },
+  ];
+
   return (
     <section
       className="relative min-h-[calc(100vh-80px)] w-full overflow-hidden bg-black bg-cover bg-center bg-no-repeat"
@@ -48,7 +55,7 @@ const Hero = () => {
       {/* Bottom fade */}
       <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 to-transparent" />
 
-      <div className="relative z-10 flex min-h-[calc(100vh-80px)] items-start px-6 pt-12 pb-8 md:px-12 md:pt-14 lg:px-16 lg:pt-16">
+      <div className="relative z-10 flex min-h-[calc(100vh-80px)] flex-col px-6 pt-12 pb-6 md:px-12 md:pt-14 md:pb-8 lg:px-16 lg:pt-16">
         <div className="flex w-full flex-col gap-8 md:flex-row md:items-start md:justify-between">
 
           {/* LEFT */}
@@ -135,6 +142,74 @@ const Hero = () => {
             </motion.div>
           </motion.div>
         </div>
+
+        {/* MOBILE ONLY: fills the empty space below the CTA */}
+        <motion.div
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="mt-auto space-y-4 pt-10 md:hidden"
+        >
+          {/* Meet the barber card */}
+          <motion.div
+            variants={fadeUp}
+            className="relative flex items-center gap-4 border border-white/15 bg-black/40 p-3 backdrop-blur-sm"
+          >
+            <div className="pointer-events-none absolute -inset-1 border border-amber-500/25" />
+            <img
+              src="/owner.jfif"
+              alt="The Foundry barber at work"
+              className="relative h-20 w-20 shrink-0 object-cover"
+            />
+            <div className="relative">
+              <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-amber-500">
+                Meet the Barber
+              </p>
+              <p className="mt-1 text-sm font-semibold uppercase tracking-wide text-white">
+                Walk-ins welcome
+              </p>
+              <p className="mt-0.5 text-xs text-gray-300">
+                Hot towel. Sharp fade. No rush.
+              </p>
+            </div>
+          </motion.div>
+
+          {/* Stats strip */}
+          <motion.div
+            variants={fadeUp}
+            className="grid grid-cols-3 divide-x divide-white/15 border-y border-white/15 py-3 text-center"
+          >
+            {stats.map((s) => (
+              <div key={s.label}>
+                <p className="text-xl font-extrabold text-amber-500">
+                  {s.value}
+                </p>
+                <p className="text-[9px] uppercase tracking-[0.25em] text-white/60">
+                  {s.label}
+                </p>
+              </div>
+            ))}
+          </motion.div>
+
+          {/* Hours + location */}
+          <motion.div
+            variants={fadeUp}
+            className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-white/70"
+          >
+            <span className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+              </span>
+              <Clock size={12} />
+              Open · 9AM–8PM
+            </span>
+            <span className="flex items-center gap-1.5">
+              <MapPin size={12} className="text-amber-500" />
+              South Austin
+            </span>
+          </motion.div>
+        </motion.div>
       </div>
 
       {/* Bottom location label */}

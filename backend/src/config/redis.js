@@ -1,17 +1,19 @@
-
 import IORedis from "ioredis";
 
 const redisUrl = process.env.REDIS_URL;
 
 if (!redisUrl) {
   throw new Error(
-    "REDIS_URL is not configured. Add it to your backend .env file."
+    "REDIS_URL is not configured. Add your Upstash Redis connection URL to the backend .env file."
   );
 }
 
 const redisConnection = new IORedis(redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: true,
+  tls: redisUrl.startsWith("rediss://")
+    ? {}
+    : undefined,
 });
 
 redisConnection.on("connect", () => {

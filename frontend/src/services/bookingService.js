@@ -51,3 +51,19 @@ export const createBooking = async (appointmentData) => {
 
   return response.data;
 };
+
+export const getBarberReviewSummary = async (barberId) => {
+  const response = await api.get(
+    `${API_PATH.BARBERS}/${barberId}/reviews/summary`
+  );
+
+  return response.data?.data ?? response.data;
+};
+
+export const getBarberReviews = async (barberId) => {
+  const response = await api.get(
+    `${API_PATH.BARBERS}/${barberId}/reviews`
+  );
+
+  return response.data?.data ?? response.data;
+};

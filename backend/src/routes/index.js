@@ -63,8 +63,8 @@ const barberGuard = [protect, requireBarber];
 
 router.get("/health", (req, res) => {
   res.json({
-    success: true,
-    message: "API is healthy",
+    status: "ok",
+    timestamp: new Date().toISOString(),
   });
 });
 

@@ -100,3 +100,4 @@ export const getMyBarberReviews = async (barberId) => {
 
   return response.data;
 };
+

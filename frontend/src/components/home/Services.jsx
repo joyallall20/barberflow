@@ -1,10 +1,38 @@
 import { useRef } from "react";
+import { Link } from "react-router-dom";
 import {
   motion,
   useScroll,
   useTransform,
   useReducedMotion,
 } from "framer-motion";
+
+const services = [
+  {
+    num: "01",
+    name: "Signature Cut",
+    desc: "Classic cut · consultation · finish",
+    price: "$45",
+  },
+  {
+    num: "02",
+    name: "Cut + Beard",
+    desc: "Signature cut · beard sculpt · finish",
+    price: "$65",
+  },
+  {
+    num: "03",
+    name: "Hot Towel Shave",
+    desc: "Traditional straight-razor shave · hot towel ritual",
+    price: "$40",
+  },
+  {
+    num: "04",
+    name: "The Foundry Experience",
+    desc: "Cut · beard · hot towel · styling",
+    price: "$85",
+  },
+];
 
 const Services = () => {
   const sectionRef = useRef(null);
@@ -18,40 +46,13 @@ const Services = () => {
   const wordmarkY = useTransform(scrollYProgress, [0, 1], ["-3%", "3%"]);
   const kickerY = useTransform(scrollYProgress, [0, 1], [-10, 10]);
 
-  const services = [
-    {
-      num: "01",
-      name: "Signature Cut",
-      desc: "Classic cut · consultation · finish",
-      price: "$45",
-    },
-    {
-      num: "02",
-      name: "Cut + Beard",
-      desc: "Signature cut · beard sculpt · finish",
-      price: "$65",
-    },
-    {
-      num: "03",
-      name: "Hot Towel Shave",
-      desc: "Traditional straight-razor shave · hot towel ritual",
-      price: "$40",
-    },
-    {
-      num: "04",
-      name: "The Foundry Experience",
-      desc: "Cut · beard · hot towel · styling",
-      price: "$85",
-    },
-  ];
-
   return (
     <section
       id="services"
       ref={sectionRef}
-      className="relative overflow-hidden border-b border-white/10 bg-[#141311] text-[#e8e2d6]"
+      className="relative scroll-mt-20 overflow-hidden border-b border-white/10 bg-[#141311] text-[#e8e2d6]"
     >
-      {/* Oversized background wordmark — slow parallax layer */}
+      {/* Oversized background wordmark: slow parallax layer */}
       <motion.div
         aria-hidden="true"
         style={prefersReducedMotion ? undefined : { y: wordmarkY }}
@@ -63,33 +64,34 @@ const Services = () => {
       </motion.div>
 
       <div className="relative z-10 mx-auto max-w-7xl px-6 py-20 md:px-12 md:py-24 lg:px-16">
-        {/* Heading */}
-        <motion.div
-          style={prefersReducedMotion ? undefined : { y: kickerY }}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.3 }}
-          transition={{ duration: 0.6 }}
-          className="mb-14 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"
-        >
-          <div>
-            <div className="mb-4 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-500">
-              <span className="h-px w-8 bg-amber-500" />
-              Services
+        {/* Outer layer: scroll parallax. Inner layer: entrance. Separate so they don't fight over `y`. */}
+        <motion.div style={prefersReducedMotion ? undefined : { y: kickerY }}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: 0.6 }}
+            className="mb-14 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"
+          >
+            <div>
+              <div className="mb-4 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-500">
+                <span className="h-px w-8 bg-amber-500" />
+                Services
+              </div>
+              <h2 className="max-w-xl text-4xl font-extrabold uppercase leading-[0.95] tracking-tight md:text-5xl lg:text-6xl">
+                What we do best.
+              </h2>
             </div>
-            <h2 className="max-w-xl text-4xl font-extrabold uppercase leading-[0.95] tracking-tight md:text-5xl lg:text-6xl">
-              What we do best.
-            </h2>
-          </div>
 
-          <div className="flex flex-col gap-2 md:items-end md:text-right">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#a89f8f]">
-              The Craft
-            </span>
-            <p className="max-w-xs text-sm leading-relaxed text-[#a89f8f]">
-              Classic barbering, modern precision.
-            </p>
-          </div>
+            <div className="flex flex-col gap-2 md:items-end md:text-right">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#a89f8f]">
+                The Craft
+              </span>
+              <p className="max-w-xs text-sm leading-relaxed text-[#a89f8f]">
+                Classic barbering, modern precision.
+              </p>
+            </div>
+          </motion.div>
         </motion.div>
 
         {/* Service list */}
@@ -128,6 +130,23 @@ const Services = () => {
             </motion.div>
           ))}
         </div>
+
+        {/* Booking CTA */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.6 }}
+          transition={{ duration: 0.5 }}
+          className="mt-10"
+        >
+          <Link
+            to="/book"
+            className="inline-flex w-full items-center justify-center gap-3 border border-amber-500 bg-amber-500 px-7 py-3.5 text-xs font-bold uppercase tracking-[0.15em] text-black transition-all duration-300 hover:bg-transparent hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141311] sm:w-auto"
+          >
+            Book a Cut
+            <span aria-hidden="true">→</span>
+          </Link>
+        </motion.div>
       </div>
     </section>
   );

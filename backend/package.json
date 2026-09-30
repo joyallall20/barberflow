@@ -15,6 +15,7 @@
   "dependencies": {
     "@paypal/paypal-server-sdk": "^2.5.0",
     "@sendinblue/client": "^3.3.1",
+    "@upstash/redis": "^1.39.0",
     "bullmq": "^6.3.10",
     "cloudinary": "^2.11.0",
     "cors": "^2.8.6",

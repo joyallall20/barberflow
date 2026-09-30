@@ -8,8 +8,9 @@ import {
   animate,
 } from "framer-motion";
 import { Users, Scissors, Star, Award } from "lucide-react";
+import { CLIENTS, RATING, barbers, yearsInBusiness } from "./shop";
 
-const CountUp = ({ to, suffix = "", prefix = "", decimals = 0, duration = 1.8 }) => {
+const CountUp = ({ to, suffix = "", decimals = 0, duration = 1.8 }) => {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, amount: 0.5 });
   const prefersReducedMotion = useReducedMotion();
@@ -17,31 +18,30 @@ const CountUp = ({ to, suffix = "", prefix = "", decimals = 0, duration = 1.8 })
 
   useEffect(() => {
     if (!inView) return;
-    if (prefersReducedMotion) {
-      setDisplay(to.toLocaleString("en-US", {
+
+    const format = (v) =>
+      v.toLocaleString("en-US", {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
-      }));
+      });
+
+    if (prefersReducedMotion) {
+      setDisplay(format(to));
       return;
     }
+
     const controls = animate(0, to, {
       duration,
       ease: [0.22, 1, 0.36, 1],
-      onUpdate: (v) => {
-        setDisplay(
-          v.toLocaleString("en-US", {
-            minimumFractionDigits: decimals,
-            maximumFractionDigits: decimals,
-          })
-        );
-      },
+      onUpdate: (v) => setDisplay(format(v)),
     });
     return () => controls.stop();
   }, [inView, to, decimals, duration, prefersReducedMotion]);
 
   return (
     <span ref={ref}>
-      {prefix}{display}{suffix}
+      {display}
+      {suffix}
     </span>
   );
 };
@@ -59,17 +59,17 @@ const Trust = () => {
   const headingY = useTransform(scrollYProgress, [0, 1], [-18, 18]);
 
   const stats = [
-    { to: 5000, suffix: "+", label: "Clients Served", icon: Users, format: true },
-    { to: 15, suffix: "+", label: "Years of Craft", icon: Scissors },
-    { to: 4.9, suffix: "", label: "Average Rating", icon: Star, decimals: 1 },
-    { to: 3, suffix: "", label: "Master Barbers", icon: Award },
+    { to: CLIENTS, suffix: "+", label: "Clients Served", icon: Users },
+    { to: yearsInBusiness(), suffix: "+", label: "Years of Craft", icon: Scissors },
+    { to: RATING, label: "Average Rating", icon: Star, decimals: 1 },
+    { to: barbers.length, label: "Master Barbers", icon: Award },
   ];
 
   return (
     <section
       id="trust"
       ref={sectionRef}
-      className="relative overflow-hidden border-y border-white/10 bg-[#141311] text-[#e8e2d6]"
+      className="relative scroll-mt-20 overflow-hidden border-y border-white/10 bg-[#141311] text-[#e8e2d6]"
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/60 to-transparent" />
 
@@ -84,31 +84,33 @@ const Trust = () => {
       </motion.div>
 
       <div className="relative z-10 mx-auto max-w-7xl px-6 py-20 md:px-12 md:py-24 lg:px-16">
-        <motion.div
-          style={prefersReducedMotion ? undefined : { y: headingY }}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.3 }}
-          transition={{ duration: 0.6 }}
-          className="mb-14 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"
-        >
-          <div>
-            <div className="mb-4 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-500">
-              <span className="h-px w-8 bg-amber-500" />
-              The Foundry
+        {/* Outer layer: scroll parallax. Inner layer: entrance. Kept separate so they don't fight over `y`. */}
+        <motion.div style={prefersReducedMotion ? undefined : { y: headingY }}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: 0.6 }}
+            className="mb-14 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"
+          >
+            <div>
+              <div className="mb-4 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-500">
+                <span className="h-px w-8 bg-amber-500" />
+                The Foundry
+              </div>
+
+              <h2 className="max-w-xl text-4xl font-extrabold uppercase leading-[0.95] tracking-tight md:text-5xl lg:text-6xl">
+                Built on craft.
+                <br />
+                <span className="text-[#a89f8f]">Trusted over time.</span>
+              </h2>
             </div>
 
-            <h2 className="max-w-xl text-4xl font-extrabold uppercase leading-[0.95] tracking-tight md:text-5xl lg:text-6xl">
-              Built on craft.
-              <br />
-              <span className="text-[#a89f8f]">Trusted over time.</span>
-            </h2>
-          </div>
-
-          <p className="max-w-sm text-sm leading-relaxed text-[#a89f8f] md:text-right">
-            Good work earns a reputation. Ours has been built one chair,
-            one cut, and one customer at a time.
-          </p>
+            <p className="max-w-sm text-sm leading-relaxed text-[#a89f8f] md:text-right">
+              Good work earns a reputation. Ours has been built one chair, one
+              cut, and one customer at a time.
+            </p>
+          </motion.div>
         </motion.div>
 
         <div className="grid grid-cols-2 border-l border-t border-white/10 md:grid-cols-4">
@@ -130,6 +132,7 @@ const Trust = () => {
               <Icon
                 size={18}
                 strokeWidth={1.5}
+                aria-hidden="true"
                 className="relative mb-6 text-amber-500 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6 sm:mb-8 sm:size-5 md:mb-10"
               />
 
@@ -147,7 +150,7 @@ const Trust = () => {
                 <CountUp to={to} suffix={suffix} decimals={decimals} />
               </motion.div>
 
-              <div className="relative mt-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#a89f8f]">
+              <div className="relative mt-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#a89f8f]">
                 {label}
               </div>
             </motion.div>
@@ -162,7 +165,7 @@ const Trust = () => {
           className="mt-10 flex items-center gap-4"
         >
           <span className="h-px flex-1 bg-white/10" />
-          <span className="text-[9px] uppercase tracking-[0.3em] text-[#a89f8f]">
+          <span className="text-[11px] uppercase tracking-[0.3em] text-[#a89f8f]">
             South Austin · Texas
           </span>
           <span className="h-px flex-1 bg-white/10" />
