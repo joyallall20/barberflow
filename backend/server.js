@@ -1,4 +1,4 @@
-/* ALWAYS put dotenv/config at line 1 in ES Modules */
+
 import "dotenv/config";
 
 import express from "express";
@@ -14,8 +14,16 @@ import {
 import { apiLimiter } from "./src/middleware/rateLimiter.js";
 import { handlePaypalWebhook } from "./src/controllers/webhook.controller.js";
 import { seedEmailTemplates } from "./src/seed/emailTemplates.seed.js";
+
+// --------------------------------------------------
+// Background Workers / Scheduled Jobs
+// --------------------------------------------------
+
 // Start BullMQ email worker
 import "./src/workers/email.worker.js";
+
+// Start keep-alive cron job
+import "./src/jobs/keepAlive.job.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -84,6 +92,7 @@ app.use(
 
 // --------------------------------------------------
 // PayPal Webhook
+//
 // IMPORTANT:
 // Register before express.json() because PayPal
 // verification requires the original raw request body.
@@ -123,11 +132,26 @@ app.use("/api", apiLimiter);
 
 // --------------------------------------------------
 // API Routes
-// All application routes are registered in
+//
+// All application routes are registered in:
 // ./src/routes/index.js
 // --------------------------------------------------
 
 app.use("/api", apiRouter);
+
+// --------------------------------------------------
+// Health Check
+//
+// Used by monitoring services and keep-alive checks.
+// --------------------------------------------------
+
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "The Foundry API",
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // --------------------------------------------------
 // 404 Handler
@@ -159,10 +183,12 @@ const connectDB = async () => {
 
     console.log("MongoDB connected successfully");
 
+    // Seed default email templates
     await seedEmailTemplates();
 
     server = app.listen(PORT, () => {
       console.log(`The Foundry API running on port ${PORT}`);
+      console.log(`Health check: /api/health`);
     });
   } catch (error) {
     console.error(
@@ -212,11 +238,17 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // --------------------------------------------------
 
 process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled Promise Rejection:", reason);
+  console.error(
+    "Unhandled Promise Rejection:",
+    reason
+  );
 });
 
 process.on("uncaughtException", (error) => {
-  console.error("Uncaught Exception:", error);
+  console.error(
+    "Uncaught Exception:",
+    error
+  );
 
   process.exit(1);
 });
