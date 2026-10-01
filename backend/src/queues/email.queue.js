@@ -28,12 +28,10 @@ const emailQueue = new Queue("foundry-email", {
  *
  * delay is in milliseconds.
  */
-export const enqueueEmail = async ({
-  type,
-  appointmentId,
-  delay = 0,
-  jobId,
-}) => {
+export const enqueueEmail = async (
+  { type, appointmentId },
+  { delay = 0, jobId } = {}
+) => {
   if (!type || !appointmentId) {
     throw new Error(
       "Email job requires a type and appointmentId."
@@ -46,7 +44,7 @@ export const enqueueEmail = async ({
     );
   }
 
-  return emailQueue.add(
+  const job = await emailQueue.add(
     type,
     {
       type,
@@ -57,6 +55,12 @@ export const enqueueEmail = async ({
       delay: Math.max(0, Number(delay) || 0),
     }
   );
+
+  console.log(
+    `Email job queued: ${job.id} (${job.name}) delay=${job.opts.delay || 0}ms`
+  );
+
+  return job;
 };
 
 export const cancelEmailJob = async (jobId) => {

@@ -184,7 +184,7 @@ export const updateEmailTemplate = async (req, res) => {
       { type },
       { $set: updates },
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       }
     );

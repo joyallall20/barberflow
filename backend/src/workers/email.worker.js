@@ -280,7 +280,7 @@ const worker = new Worker(
       const result = await sendEmail({
         to: customer.email,
         subject: "Your THE FOUNDRY appointment is confirmed",
-        html,
+        htmlContent: html,
       });
 
       return {
@@ -329,7 +329,7 @@ const worker = new Worker(
       const result = await sendEmail({
         to: customer.email,
         subject: "Reminder: Your THE FOUNDRY appointment",
-        html,
+        htmlContent: html,
       });
 
       appointment.reminderSent = true;
@@ -378,7 +378,7 @@ const worker = new Worker(
       const result = await sendEmail({
         to: customer.email,
         subject: "Thanks for visiting THE FOUNDRY",
-        html,
+        htmlContent: html,
       });
 
       return {
@@ -433,7 +433,7 @@ const worker = new Worker(
       const result = await sendEmail({
         to: customer.email,
         subject: "How was your THE FOUNDRY experience?",
-        html,
+        htmlContent: html,
       });
 
       appointment.reviewRequestSent = true;
@@ -506,7 +506,7 @@ const worker = new Worker(
       const result = await sendEmail({
         to: customer.email,
         subject: "Ready for your next visit?",
-        html,
+        htmlContent: html,
       });
 
       appointment.rebookingReminderSent = true;

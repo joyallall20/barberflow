@@ -1,85 +1,36 @@
 import mongoose from "mongoose";
 
-const emailTemplateSchema = new mongoose.Schema(
+const emailSettingsSchema = new mongoose.Schema(
   {
-    // ============================================================
-    // TEMPLATE IDENTIFICATION
-    // ============================================================
-
-    type: {
-      type: String,
-      enum: [
-        "booking-confirmation",
-        "appointment-reminder",
-        "thank-you",
-        "review-request",
-        "rebooking-followup",
-        "birthday",
-        "holiday",
-        "promotion",
-      ],
-      required: true,
-      unique: true,
-      index: true,
+    singletonKey: { type: String, default: "global", unique: true, immutable: true, select: false },
+    automationEnabled: { type: Boolean, default: true },
+    timezone: { type: String, default: "Asia/Kolkata", trim: true },
+    beforeAppointment: {
+      bookingConfirmation: { enabled: { type: Boolean, default: true }, delayMinutes: { type: Number, default: 0, min: 0 } },
+      appointmentReminder: { enabled: { type: Boolean, default: true }, minutesBefore: { type: Number, default: 1440, min: 0 } },
     },
-
-    name: {
-      type: String,
-      required: true,
-      trim: true,
+    afterAppointment: {
+      thankYou: { enabled: { type: Boolean, default: true }, delayMinutes: { type: Number, default: 60, min: 0 } },
+      reviewRequest: { enabled: { type: Boolean, default: true }, delayMinutes: { type: Number, default: 1440, min: 0 } },
     },
-
-    description: {
-      type: String,
-      default: "",
-      trim: true,
+    followupWinback: { enabled: { type: Boolean, default: false }, delayDays: { type: Number, default: 30, min: 0 } },
+    specialOccasions: {
+      birthday: { enabled: { type: Boolean, default: false }, daysBefore: { type: Number, default: 0, min: 0 } },
+      holiday: { enabled: { type: Boolean, default: false } },
     },
-
-    // ============================================================
-    // EMAIL CONTENT
-    // ============================================================
-
-    subject: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 200,
-    },
-
-    // HTML email body.
-    body: {
-      type: String,
-      required: true,
-    },
-
-    // ============================================================
-    // TEMPLATE STATUS
-    // ============================================================
-
-    enabled: {
-      type: Boolean,
-      default: true,
-    },
-
-    // ============================================================
-    // AVAILABLE VARIABLES
-    // ============================================================
-
-    variables: {
-      type: [String],
-      default: [],
-    },
+    promotions: { enabled: { type: Boolean, default: false } },
   },
-  {
-    timestamps: true,
-    strict: true,
-  }
+  { timestamps: true, strict: true }
 );
 
-if (mongoose.models.EmailTemplate) {
-  delete mongoose.models.EmailTemplate;
-}
+emailSettingsSchema.statics.getOrCreate = function getOrCreate() {
+  return this.findOneAndUpdate(
+    { singletonKey: "global" },
+    { $setOnInsert: { singletonKey: "global" } },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+  );
+};
 
-const EmailTemplate = mongoose.model("EmailTemplate", emailTemplateSchema);
+const EmailSettings = mongoose.models.EmailSettings || mongoose.model("EmailSettings", emailSettingsSchema);
 
-export default EmailTemplate;
+export default EmailSettings;
